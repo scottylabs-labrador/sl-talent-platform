@@ -42,14 +42,14 @@ const BRIDGES: readonly BridgeDef<unknown>[] = [
     queue: queues.synthesis,
     jobName: QUEUE.synthesis,
     schema: SynthesisJob,
-    jobId: (d) => `synthesis:${(d as { screenId: string }).screenId}`,
+    jobId: (d) => `synthesis-${(d as { screenId: string }).screenId}`,
   } as BridgeDef<unknown>,
   {
     list: MATCHING_LIST,
     queue: queues.matching,
     jobName: QUEUE.matching,
     schema: MatchingJob,
-    jobId: (d) => `matching:${(d as { jobId: string }).jobId}`,
+    jobId: (d) => `matching-${(d as { jobId: string }).jobId}`,
   } as BridgeDef<unknown>,
   {
     list: LEDGER_FANOUT_LIST,
@@ -59,7 +59,7 @@ const BRIDGES: readonly BridgeDef<unknown>[] = [
     // Dedupe only the shortlist-fanout variant; explicit event batches are unique.
     jobId: (d) => {
       const shortlistId = (d as { shortlistId?: string }).shortlistId;
-      return shortlistId ? `ledger_fanout:${shortlistId}` : undefined;
+      return shortlistId ? `ledger_fanout-${shortlistId}` : undefined;
     },
   } as BridgeDef<unknown>,
 ];
@@ -71,11 +71,12 @@ function startBridge(def: BridgeDef<unknown>): Bridge {
   const loop = async (): Promise<void> => {
     log.info(SCOPE, 'listening for bridge jobs', { list: def.list });
     while (running) {
+      let payload: string | undefined;
       try {
         // Block up to 5s so shutdown stays responsive.
         const res = await conn.brpop(def.list, 5);
         if (!res) continue;
-        const payload = res[1];
+        payload = res[1];
         let parsedJson: unknown;
         try {
           parsedJson = JSON.parse(payload);
@@ -103,6 +104,11 @@ function startBridge(def: BridgeDef<unknown>): Bridge {
         log.info(SCOPE, 'bridged job', { list: def.list, jobId });
       } catch (err) {
         if (!running) break;
+        // BRPOP already consumed the item; put it back so a transient enqueue
+        // failure (Redis blip, BullMQ error) cannot silently lose the job.
+        if (payload !== undefined) {
+          await conn.lpush(def.list, payload).catch(() => undefined);
+        }
         log.warn(SCOPE, 'bridge loop error; retrying', {
           list: def.list,
           error: err instanceof Error ? err.message : String(err),
