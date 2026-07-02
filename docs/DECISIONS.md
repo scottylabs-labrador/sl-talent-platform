@@ -56,6 +56,26 @@ connects as the table owner, and owners bypass their own grants. A database
 trigger raising on UPDATE/DELETE binds every role including the owner, which
 is strictly stronger.
 
+## D8. Per-agent model routing (July 2026 pricing)
+
+Chosen by comparing OpenRouter's live catalog against each agent's role in
+the architecture spec (section 6). Prices are $/MTok in/out. Override any
+of these per environment via `OPENROUTER_MODEL_*`.
+
+| Agent | Model | Price | Rationale |
+| --- | --- | --- | --- |
+| rep | `google/gemini-3.5-flash` | 1.50 / 9 | Realtime voice loop: latency beats brilliance. Latency-optimized frontier flash; ~$0.50 LLM cost per 30-min screen with caching. |
+| synthesizer | `anthropic/claude-opus-4.8` | 5 / 25 | The dossier is the product artifact. ~$0.20 per screen at full transcript length; negligible against the $2-5/screen budget. |
+| recruiter | `anthropic/claude-opus-4.8` | 5 / 25 | Ranking correctness and refusal compliance are trust-critical. ~$0.60 per shortlist on a 30-candidate longlist. |
+| verifier | `openai/gpt-5.4-nano` | 0.20 / 1.25 | Spec calls for a cheap small model; deterministic code does the real checks. |
+| concierge | `anthropic/claude-sonnet-5` | 2 / 10 (intro) | Sponsor-facing intake quality directly shapes shortlist quality; near-Opus at a third the cost during intro pricing. |
+| coach | `anthropic/claude-sonnet-5` | 2 / 10 | Warm, specific writing for the student-facing report; ~$0.03/report. |
+| sentinel | `google/gemini-3.1-flash-lite` | 0.25 / 1.50 | 1M context digests a week of agent_runs in one pass, cheaply. |
+
+Estimated steady-state LLM spend at pilot scale (50 students, 2 sponsors):
+well under $100/month, dominated by the rep's realtime tokens. Budget caps
+per agent live in `config` and the Sentinel alerts at 80% (per spec).
+
 ## D7. MCP service deferred (Phase 2, per spec)
 
 The spec marks the MCP server as Phase 2. Not built in v1; the authz
