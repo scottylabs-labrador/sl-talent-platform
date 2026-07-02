@@ -870,7 +870,7 @@ export const sponsorRouter = router({
         name: v.name,
         andrewId: v.andrew_id,
         program: v.program,
-        gradDate: v.grad_date ? v.grad_date.toISOString() : null,
+        gradDate: v.grad_date ? toDate(v.grad_date).toISOString() : null,
         kind: v.kind,
         avatarColor: '#063f58',
         ssoVerified: true,
@@ -1017,9 +1017,16 @@ const MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ] as const;
-function monthYear(d: Date): string {
+// Raw-SQL view rows (sponsor_visible_students) return `date` columns as
+// strings; drizzle-mapped rows return Date. Accept both.
+function toDate(d: Date | string): Date {
+  return d instanceof Date ? d : new Date(d);
+}
+function monthYear(raw: Date | string): string {
+  const d = toDate(raw);
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
-function monthDay(d: Date): string {
+function monthDay(raw: Date | string): string {
+  const d = toDate(raw);
   return `${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCDate()}`;
 }
