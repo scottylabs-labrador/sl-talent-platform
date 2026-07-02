@@ -1,0 +1,14 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "pnpm install --frozen-lockfile && pnpm --filter @tartan/voice-gateway... run build"
+  },
+  "deploy": {
+    "startCommand": "pnpm --filter @tartan/voice-gateway start",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 300,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5
+  }
+}
