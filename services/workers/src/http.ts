@@ -6,6 +6,7 @@
 //                             Railway cron service to drive schedules over http.
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { PORT, AUTH_SECRET } from './env.js';
 import { log } from './logger.js';
 import { queues } from './queues.js';
@@ -70,13 +71,18 @@ async function handle(req: IncomingMessage, res: ServerResponse): Promise<void> 
   }
 
   if (req.method === 'POST' && path.startsWith('/trigger/')) {
-    // Auth: shared header must equal AUTH_SECRET (and AUTH_SECRET must be set).
+    // Auth: dedicated TRIGGER_KEY (falls back to AUTH_SECRET), compared in
+    // constant time so the check leaks nothing about the key.
+    const expected = process.env.TRIGGER_KEY ?? AUTH_SECRET;
     const key = req.headers['x-trigger-key'];
-    if (!AUTH_SECRET) {
-      send(res, 503, { ok: false, error: 'AUTH_SECRET not configured' });
+    if (!expected) {
+      send(res, 503, { ok: false, error: 'trigger key not configured' });
       return;
     }
-    if (key !== AUTH_SECRET) {
+    const provided = typeof key === 'string' ? key : '';
+    const a = createHash('sha256').update(provided).digest();
+    const b = createHash('sha256').update(expected).digest();
+    if (!timingSafeEqual(a, b)) {
       send(res, 401, { ok: false, error: 'invalid trigger key' });
       return;
     }

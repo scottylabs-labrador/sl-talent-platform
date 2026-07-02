@@ -12,12 +12,16 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   lt,
+  sql,
   claimEvidence,
   coachingReports,
+  config,
   consents,
   dossiers,
   evidence,
+  exceptions,
   experienceStories,
   jobs,
   ledgerEvents,
@@ -31,7 +35,15 @@ import {
   students,
   users,
 } from '@tartan/db';
+import { embedOne } from '@tartan/agents';
 import {
+  enqueueDeletion,
+  enqueueExport,
+  enqueueVerification,
+} from '@/lib/redis';
+import {
+  AddEvidenceInput,
+  AddEvidenceOutput,
   ApproveScreenInput,
   ApproveScreenOutput,
   CreateScreenInput,
@@ -39,6 +51,8 @@ import {
   DeleteAccountInput,
   DeleteAccountOutput,
   ExportOutput,
+  ExportStatus,
+  exportConfigKey,
   HomeOutput,
   LedgerInput,
   LedgerOutput,
@@ -808,18 +822,185 @@ export const studentRouter = router({
       return { entryId: input.entryId, delivered: true };
     }),
 
-  exportData: studentProcedure.output(ExportOutput).mutation(async () => {
-    // The real archive is assembled by the export worker path; here we return a
-    // job id the client can surface. (Flagged: worker wiring pending.)
+  exportData: studentProcedure.output(ExportOutput).mutation(async ({ ctx }) => {
+    const studentId = ctx.principal.studentId;
+    const requestedAt = new Date().toISOString();
+    const pending: ExportStatus = { state: 'pending', requestedAt };
+    // Upsert the status key the export worker flips to ready, then enqueue.
+    await ctx.db
+      .insert(config)
+      .values({ key: exportConfigKey(studentId), value: pending })
+      .onConflictDoUpdate({
+        target: config.key,
+        set: { value: pending, version: sql`${config.version} + 1` },
+      });
+    await enqueueExport({ studentId });
+    await writeLedgerEvent({
+      studentId,
+      actorKind: 'student',
+      actorId: ctx.principal.userId,
+      kind: 'edit',
+      detail: { kind: 'edit', field: 'export', note: 'You requested your full data export.' },
+    });
     return { requested: true, jobId: randomUUID() };
   }),
+
+  // Poll target for the Settings screen: the export worker writes the same
+  // config key with state ready + a 24h download url.
+  exportStatus: studentProcedure
+    .output(ExportStatus.nullable())
+    .query(async ({ ctx }) => {
+      const rows = await ctx.db
+        .select({ value: config.value })
+        .from(config)
+        .where(eq(config.key, exportConfigKey(ctx.principal.studentId)))
+        .limit(1);
+      if (!rows[0]) return null;
+      const parsed = ExportStatus.safeParse(rows[0].value);
+      return parsed.success ? parsed.data : null;
+    }),
 
   deleteAccount: studentProcedure
     .input(DeleteAccountInput)
     .output(DeleteAccountOutput)
-    .mutation(async () => {
-      // Hard delete + S3 purge is a worker path (services/workers/deletion).
-      // Here we schedule and return a job id; the client then signs out.
+    .mutation(async ({ ctx }) => {
+      const studentId = ctx.principal.studentId;
+      const requestedAt = new Date().toISOString();
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'account',
+          note: 'You asked us to delete your account. Everything goes: rows, audio, exports.',
+        },
+      });
+      // The deletion worker anonymizes the historical ledger (salted hash),
+      // cascades every row, and purges S3 raw/clips/exports (spec section 8).
+      await enqueueDeletion({ studentId, requestedAt });
       return { scheduled: true, jobId: randomUUID() };
+    }),
+
+  // The consent screen's text-mode escape link files a real accommodation
+  // request in the ops exception queue (text-mode screens are phase 1.5).
+  requestTextMode: studentProcedure
+    .input(z.object({ screenId: z.string().uuid() }))
+    .output(z.object({ requested: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const studentId = ctx.principal.studentId;
+      await assertOwnScreen(ctx.db, input.screenId, studentId);
+      await ctx.db.insert(exceptions).values({
+        category: 'student_report',
+        agent: 'rep',
+        context: {
+          agent: 'rep',
+          quote: 'Student requested the written interview format.',
+          category: 'student_report',
+          refs: { screenId: input.screenId, studentId },
+        },
+        recommendation: 'Schedule a text-mode screen and release the voice slot.',
+        status: 'open',
+      });
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'screen',
+          note: 'You asked for the written interview format.',
+        },
+      });
+      return { requested: true };
+    }),
+
+  // POST /me/evidence (spec section 7): pending provenance, immediate render
+  // under the provenance grammar, then the verification worker takes over.
+  addEvidence: studentProcedure
+    .input(AddEvidenceInput)
+    .output(AddEvidenceOutput)
+    .mutation(async ({ ctx, input }) => {
+      const studentId = ctx.principal.studentId;
+      let embedding: number[] | null = null;
+      try {
+        embedding = await embedOne(
+          `${input.type}: ${input.title} ${input.url ?? ''}`,
+        );
+      } catch {
+        embedding = null; // embeddings are an optimization, never a blocker
+      }
+      const inserted = await ctx.db
+        .insert(evidence)
+        .values({
+          studentId,
+          type: input.type,
+          provenance: 'pending',
+          title: input.title,
+          url: input.url ?? null,
+          meta: input.meta ?? {},
+          embedding,
+        })
+        .returning();
+      const row = inserted[0]!;
+
+      // Optional claim edges by skill slug.
+      if (input.skillSlugs?.length) {
+        const skillRows = await ctx.db
+          .select({ id: skills.id, slug: skills.slug })
+          .from(skills)
+          .where(inArray(skills.slug, input.skillSlugs));
+        for (const s of skillRows) {
+          const claim = await ctx.db
+            .select({ id: skillClaims.id })
+            .from(skillClaims)
+            .where(and(eq(skillClaims.studentId, studentId), eq(skillClaims.skillId, s.id)))
+            .limit(1);
+          const claimId = claim[0]
+            ? claim[0].id
+            : (
+                await ctx.db
+                  .insert(skillClaims)
+                  .values({ studentId, skillId: s.id, proficiency: 3, verified: false })
+                  .returning({ id: skillClaims.id })
+              )[0]!.id;
+          await ctx.db
+            .insert(claimEvidence)
+            .values({ claimId, evidenceId: row.id })
+            .onConflictDoNothing();
+        }
+      }
+
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'evidence',
+          note: `You added "${input.title}". Verification is queued.`,
+        },
+      });
+      try {
+        await enqueueVerification({ evidenceId: row.id, studentId });
+      } catch {
+        // Redis unreachable: evidence stays pending; the verification sweep
+        // can pick it up later. Never block the student on queue plumbing.
+      }
+
+      return {
+        evidence: {
+          id: row.id,
+          type: row.type,
+          provenance: row.provenance,
+          title: row.title,
+          url: row.url,
+          meta: row.meta ?? {},
+          caption: row.type.replace(/_/g, ' '),
+        },
+      };
     }),
 });

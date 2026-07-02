@@ -32,8 +32,12 @@ export function BrandGlyph({
   ...rest
 }: BrandGlyphProps) {
   const r = radius ?? (size >= 34 ? 9 : 8);
-  const glyphW = Math.round(size * 0.53);
-  const glyphH = Math.round(glyphW * (55 / 64));
+  // Spec pairs from the prototypes: 34px tile → 18x16 monogram, 30px tile →
+  // 15x13. Other tile sizes scale off the 34px pair.
+  const [glyphW, glyphH] =
+    size === 34 ? [18, 16]
+    : size === 30 ? [15, 13]
+    : [Math.round((size * 18) / 34), Math.round((size * 16) / 34)];
   return (
     <span
       className={cx(styles.tile, inset && styles.inset, className)}

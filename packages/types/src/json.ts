@@ -247,6 +247,8 @@ export type AgentRunOutput = z.infer<typeof AgentRunOutput>;
 // underlying rows an operator may want to open.
 export const ExceptionContext = z.object({
   agent: z.string(),
+  // One-line card title (14px/600 in the queue; resolved rows collapse to it).
+  title: z.string().optional(),
   quote: z.string(),
   refs: z
     .object({

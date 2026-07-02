@@ -119,6 +119,7 @@ export const opsRouter = router({
         categoryLabel: CATEGORY_LABEL[category],
         categoryTone: CATEGORY_TONE[category],
         agent: (r.agent ?? 'sentinel') as AgentName,
+        title: context.title ?? (context.quote ?? '').slice(0, 96),
         quote: context.quote ?? '',
         recommendation: r.recommendation ?? '',
         status: r.status,

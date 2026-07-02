@@ -34,7 +34,9 @@ function outcomePrompt(title: string): string {
 export function ProfileScreen() {
   const { data, isLoading } = trpc.student.profile.useQuery();
   const [viewSponsor, setViewSponsor] = useState(false);
-  const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
+  // undefined = untouched (defaults to the first skill, like the prototype's
+  // initial expandedSkill); null = explicitly deselected (empty state shows).
+  const [expandedSkill, setExpandedSkill] = useState<string | null | undefined>(undefined);
 
   const screenId = data?.screenDossierCard?.screenId;
   const review = trpc.student.screenReview.useQuery(
@@ -52,7 +54,8 @@ export function ProfileScreen() {
 
   const { identity, logisticsChips, talentGraph, evidence, stories, screenDossierCard } = data;
   const evidenceById = new Map(evidence.map((e) => [e.id, e]));
-  const selected = expandedSkill ?? talentGraph[0]?.skillId ?? null;
+  const selected =
+    expandedSkill === undefined ? (talentGraph[0]?.skillId ?? null) : expandedSkill;
   const activeSkill = talentGraph.find((s) => s.skillId === selected) ?? null;
 
   const [degree, school] = (identity.program ?? '').split(', ');
@@ -110,7 +113,7 @@ export function ProfileScreen() {
                 <button
                   key={s.skillId}
                   type="button"
-                  onClick={() => setExpandedSkill((cur) => ((cur ?? talentGraph[0]?.skillId) === s.skillId ? null : s.skillId))}
+                  onClick={() => setExpandedSkill(selected === s.skillId ? null : s.skillId)}
                   style={{ padding: '8px 11px', borderRadius: 12, fontWeight: 600, fontSize: 11, textAlign: 'left', lineHeight: 1.35, display: 'flex', flexDirection: 'column', gap: 2, cursor: 'pointer', ...style }}
                 >
                   <span>{s.name}</span>

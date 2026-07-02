@@ -14,11 +14,14 @@ export function Avatar({
   size = 40,
   radius = '50%',
   fontSize = 14,
+  company = false,
 }: {
   children: ReactNode;
   size?: number;
   radius?: number | string;
   fontSize?: number;
+  /** Company glyph tiles use Satoshi 700 (person initials stay Inter 600). */
+  company?: boolean;
 }) {
   return (
     <div
@@ -31,10 +34,10 @@ export function Avatar({
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontWeight: 600,
+        fontWeight: company ? 700 : 600,
         fontSize,
         flex: 'none',
-        fontFamily: 'var(--font-ui)',
+        fontFamily: company ? 'var(--font-display)' : 'var(--font-ui)',
       }}
     >
       {children}
@@ -180,37 +183,53 @@ export function VisibilitySwitch({
   label?: string;
 }) {
   return (
+    // Transparent 44px button (a11y tap floor); the inner span is the spec
+    // 40x23 visual track. Negative margins keep the layout footprint at 40x23.
     <button
       type="button"
       onClick={onClick}
       aria-pressed={on}
       aria-label={label ?? 'Toggle sponsor visibility'}
       style={{
-        width: 40,
-        height: 23,
-        minWidth: 40,
-        borderRadius: 100,
-        border: `1px solid ${on ? '#0e96d1' : '#aebdcc'}`,
-        background: on ? '#0e96d1' : '#fff',
-        position: 'relative',
+        width: 44,
+        height: 44,
+        margin: '-10.5px -2px',
         padding: 0,
+        border: 'none',
+        background: 'transparent',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         cursor: 'pointer',
         flex: 'none',
       }}
     >
       <span
         style={{
-          position: 'absolute',
-          top: 2,
-          left: on ? 20 : 2,
-          width: 17,
-          height: 17,
-          borderRadius: '50%',
-          background: '#fff',
-          boxShadow: '0 1px 2px rgba(0,0,0,.2)',
-          transition: 'left 180ms cubic-bezier(.2,0,0,1)',
+          width: 40,
+          height: 23,
+          borderRadius: 100,
+          border: `1px solid ${on ? '#0e96d1' : '#aebdcc'}`,
+          background: on ? '#0e96d1' : '#fff',
+          position: 'relative',
+          display: 'block',
+          flex: 'none',
         }}
-      />
+      >
+        <span
+          style={{
+            position: 'absolute',
+            top: 2,
+            left: on ? 20 : 2,
+            width: 17,
+            height: 17,
+            borderRadius: '50%',
+            background: '#fff',
+            boxShadow: '0 1px 2px rgba(0,0,0,.2)',
+            transition: 'left 180ms cubic-bezier(.2,0,0,1)',
+          }}
+        />
+      </span>
     </button>
   );
 }
@@ -303,13 +322,16 @@ export function AudioMomentRow({
           onClick={toggle}
           aria-label={playing ? 'Pause moment' : 'Play moment'}
           style={{
-            width: playSize,
-            height: playSize,
-            minWidth: 44,
-            minHeight: 44,
+            // 44px hit area (a11y floor) around the spec-size visual circle:
+            // the padding is part of the button but clipped out of the fill.
+            width: 44,
+            height: 44,
+            padding: (44 - playSize) / 2,
+            margin: (playSize - 44) / 2,
             borderRadius: '50%',
             border: 'none',
             background: '#063f58',
+            backgroundClip: 'content-box',
             color: '#fff',
             display: 'flex',
             alignItems: 'center',
@@ -318,7 +340,11 @@ export function AudioMomentRow({
             flex: 'none',
           }}
         >
-          {playing ? <Pause size={14} fill="#fff" /> : <Play size={15} fill="#fff" />}
+          {playing ? (
+            <Pause size={playSize <= 32 ? 11 : 12} fill="#fff" />
+          ) : (
+            <Play size={playSize <= 32 ? 11 : 12} fill="#fff" />
+          )}
         </button>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: '#1e1e1e' }}>{tag}</div>

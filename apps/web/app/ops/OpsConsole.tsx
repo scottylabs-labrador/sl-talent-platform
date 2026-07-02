@@ -216,9 +216,9 @@ export function OpsConsole({
                 <div key={item.id} className={styles.resolvedRow}>
                   <CheckIcon />
                   <span className={styles.resolvedText}>
-                    <b>{label}</b> · {item.quote}
+                    <b>{label}</b> · {item.title}
                   </span>
-                  <span className={styles.resolvedStamp}>logged → eval data</span>
+                  <span className={styles.resolvedStamp}>logged, becomes eval data</span>
                 </div>
               );
             }
@@ -234,6 +234,9 @@ export function OpsConsole({
                     style={{ color: colors.fg, background: colors.bg }}
                   >
                     {item.categoryLabel}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 600, flex: 1, minWidth: 0 }}>
+                    {item.title}
                   </span>
                   <span className={styles.ageStamp}>
                     {formatRelative(item.createdAt)}
@@ -363,12 +366,7 @@ export function OpsConsole({
           </div>
 
           <div className={styles.adverseCard}>
-            <div className={styles.adverseHeaderRow}>
-              <span className={styles.adverseHeader}>Adverse-impact monitor</span>
-              <span className={styles.p2Tag} title="Shortlist Sampler ships in phase 2">
-                phase 2
-              </span>
-            </div>
+            <span className={styles.adverseHeader}>Adverse-impact monitor</span>
             <span className={styles.adverseBody}>{sidebar.adverseImpact.body}</span>
             <span className={styles.adverseMeta}>{sidebar.adverseImpact.meta}</span>
           </div>

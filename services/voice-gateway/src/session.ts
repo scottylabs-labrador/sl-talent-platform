@@ -6,6 +6,7 @@
 // than a counter, so it stays correct across a disconnect/rejoin with no ticking
 // process in between.
 
+import { randomUUID } from 'node:crypto';
 import { getRedis } from './redis.js';
 import {
   ACTIVE_SESSION_TTL_SECONDS,
@@ -15,6 +16,12 @@ import {
 export interface CallSession {
   screenId: string;
   studentId: string;
+  /**
+   * Random per-call rejoin credential. The signed call token is single-use
+   * and expires in ~2 minutes; a dropped client reconnects with this token
+   * (handed over in the ready frame) within the 5-minute rejoin window.
+   */
+  resumeToken: string;
   /** Current section index (0..5). */
   sectionIndex: number;
   /** Wall-clock ms when the call started. */
@@ -43,6 +50,7 @@ function serialize(s: CallSession): Record<string, string> {
   return {
     screenId: s.screenId,
     studentId: s.studentId,
+    resumeToken: s.resumeToken,
     sectionIndex: String(s.sectionIndex),
     callStartEpoch: String(s.callStartEpoch),
     pausedMs: String(s.pausedMs),
@@ -61,6 +69,7 @@ function deserialize(h: Record<string, string>): CallSession | null {
   return {
     screenId: h.screenId,
     studentId: h.studentId,
+    resumeToken: h.resumeToken ?? '',
     sectionIndex: Number(h.sectionIndex ?? '0'),
     callStartEpoch: Number(h.callStartEpoch ?? '0'),
     pausedMs: Number(h.pausedMs ?? '0'),
@@ -83,6 +92,7 @@ export function newSession(input: {
   return {
     screenId: input.screenId,
     studentId: input.studentId,
+    resumeToken: randomUUID(),
     sectionIndex: 0,
     callStartEpoch: Date.now(),
     pausedMs: 0,

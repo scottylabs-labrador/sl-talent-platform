@@ -29,6 +29,14 @@ export function SettingsScreen() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [exportRequested, setExportRequested] = useState(false);
 
+  // Poll the export status while an archive is being prepared; the worker
+  // flips the same key to ready with a 24h download link.
+  const exportStatus = trpc.student.exportStatus.useQuery(undefined, {
+    refetchInterval: (q) =>
+      q.state.data?.state === 'pending' || exportRequested ? 4000 : false,
+  });
+  const exportReady = exportStatus.data?.state === 'ready' && exportStatus.data.url;
+
   const current = visibility ?? profile.data?.visibility ?? 'searchable';
 
   const pickVisibility = (opt: (typeof VIS_OPTIONS)[number]) => {
@@ -45,9 +53,10 @@ export function SettingsScreen() {
       onSuccess: () => {
         setExportRequested(true);
         void utils.student.ledger.invalidate();
+        void utils.student.exportStatus.invalidate();
       },
     });
-    toast('Export queued. We will email you a link when it is ready.', { durationMs: 2600 });
+    toast('Export started. The download link appears here when it is ready.', { durationMs: 2600 });
   };
 
   const doDelete = () => {
@@ -109,14 +118,24 @@ export function SettingsScreen() {
       </div>
 
       {/* Data actions */}
+      {exportReady ? (
+        <a
+          href={exportStatus.data!.url}
+          target="_blank"
+          rel="noreferrer"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 100, background: '#e7f5fa', border: '1px solid #90cfea', color: '#0a6b94', fontSize: 12.5, fontWeight: 600, textDecoration: 'none' }}
+        >
+          Download your data (link expires in 24 hours)
+        </a>
+      ) : null}
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" onClick={doExport} className={styles.btnGhost} style={{ flex: 1, height: 42, fontSize: 12.5, fontWeight: 600 }}>
-          {exportRequested ? 'Preparing your archive…' : 'Export everything'}
+        <button type="button" onClick={doExport} className={styles.btnGhost} style={{ flex: 1, height: 44, fontSize: 12.5, fontWeight: 600 }}>
+          {exportRequested && !exportReady ? 'Preparing your archive…' : 'Export everything'}
         </button>
         <button
           type="button"
           onClick={doDelete}
-          style={{ flex: 1, height: 42, borderRadius: 100, border: '1px solid #f3bbc5', background: confirmDelete ? '#fdf2f4' : '#fff', color: '#c4213e', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+          style={{ flex: 1, height: 44, borderRadius: 100, border: '1px solid #f3bbc5', background: confirmDelete ? '#fdf2f4' : '#fff', color: '#c4213e', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
         >
           {confirmDelete ? 'Tap again to confirm' : 'Delete account, for real'}
         </button>

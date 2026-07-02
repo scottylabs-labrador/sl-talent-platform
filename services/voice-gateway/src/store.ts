@@ -7,6 +7,7 @@ import {
   db,
   eq,
   and,
+  sql,
   screens,
   screenMoments,
   consents,
@@ -35,8 +36,15 @@ async function guarded<T>(label: string, fn: () => Promise<T>): Promise<T | null
   }
 }
 
-/** Whether the in-app consent row exists and is granted (S3 gate, half one). */
-export async function hasAppConsent(studentId: string): Promise<boolean> {
+/**
+ * Whether the in-app consent row exists and is granted (S3 gate, half one).
+ * Scoped to THIS screen: startCall writes evidence.screenId, so a consent
+ * from an earlier screen can never satisfy a later call's gate.
+ */
+export async function hasAppConsent(
+  studentId: string,
+  screenId: string,
+): Promise<boolean> {
   const rows = await guarded('hasAppConsent', () =>
     db()
       .select({ id: consents.id })
@@ -46,11 +54,24 @@ export async function hasAppConsent(studentId: string): Promise<boolean> {
           eq(consents.studentId, studentId),
           eq(consents.kind, 'app_recording'),
           eq(consents.granted, true),
+          sql`${consents.evidence}->>'screenId' = ${screenId}`,
         ),
       )
       .limit(1),
   );
   return Boolean(rows && rows.length > 0);
+}
+
+/** The already-persisted transcript for a screen (resume must append, not overwrite). */
+export async function loadTranscript(screenId: string): Promise<Transcript> {
+  const rows = await guarded('loadTranscript', () =>
+    db()
+      .select({ transcript: screens.transcript })
+      .from(screens)
+      .where(eq(screens.id, screenId))
+      .limit(1),
+  );
+  return rows?.[0]?.transcript ?? [];
 }
 
 export async function markScreenLive(screenId: string): Promise<void> {
@@ -79,9 +100,11 @@ export async function recordVerbalConsent(
   span: ConsentVerbalSpan,
 ): Promise<void> {
   await guarded('recordVerbalConsent', async () => {
+    // consent_app_at belongs to the in-app checkbox consent (written by
+    // startCall); the verbal confirmation only records its span.
     await db()
       .update(screens)
-      .set({ consentVerbalSpan: span, consentAppAt: new Date() })
+      .set({ consentVerbalSpan: span })
       .where(eq(screens.id, screenId));
   });
 }
@@ -133,12 +156,16 @@ export async function markProcessing(
   });
 }
 
-/** Consent declined or abandoned pre-consent: drop the call, mark struck. */
+/**
+ * Consent declined or abandoned pre-consent: drop the call, mark struck, and
+ * purge any transcript persisted so far — nothing from an unconsented call
+ * survives, per the compliance gate (spec section 4).
+ */
 export async function markStruck(screenId: string): Promise<void> {
   await guarded('markStruck', async () => {
     await db()
       .update(screens)
-      .set({ status: 'struck', endedAt: new Date() })
+      .set({ status: 'struck', endedAt: new Date(), transcript: [] })
       .where(eq(screens.id, screenId));
   });
 }

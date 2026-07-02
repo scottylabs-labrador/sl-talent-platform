@@ -38,6 +38,7 @@ export function CallRoom({ screenId, initialPhase }: { screenId: string; initial
   const [conn, setConn] = useState<{ wsUrl: string; token: string; simulated: boolean } | null>(null);
 
   const startCall = trpc.student.startCall.useMutation();
+  const requestTextMode = trpc.student.requestTextMode.useMutation();
 
   const voice = useVoiceSession({
     wsUrl: conn?.wsUrl ?? null,
@@ -60,7 +61,16 @@ export function CallRoom({ screenId, initialPhase }: { screenId: string; initial
             setB={setConsentB}
             pending={startCall.isPending}
             onClose={() => router.push('/')}
-            onTextMode={() => toast('The written version is coming soon.', { durationMs: 2600 })}
+            onTextMode={() => {
+              requestTextMode.mutate(
+                { screenId },
+                {
+                  onSuccess: () =>
+                    toast('Request received. The team will set up the written version.', { durationMs: 2600 }),
+                  onError: () => toast('Could not send that. Please try again.', { durationMs: 2600 }),
+                },
+              );
+            }}
             onStart={() => {
               startCall.mutate(
                 { screenId, consentRecording: consentA, consentLicense: consentB },

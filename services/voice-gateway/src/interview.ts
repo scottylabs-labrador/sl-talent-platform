@@ -27,6 +27,8 @@ import {
   elapsedMs,
   consentSatisfied,
   saveSession,
+  markResumable,
+  deleteSession,
 } from './session.js';
 import {
   markScreenLive,
@@ -38,6 +40,8 @@ import {
   setAudioKey,
   fileEscalation,
   logScreenCost,
+  hasAppConsent,
+  loadTranscript,
 } from './store.js';
 import { AudioUploader, s3Enabled } from './s3-audio.js';
 import { enqueueSynthesis } from './queue.js';
@@ -51,9 +55,11 @@ import { runRepTurn, sentenceChunks, type RepToolCall } from './rep-agent.js';
 import { log } from './log.js';
 
 /** Outgoing frame: the shared ServerMsg union, plus the `ready` frame carrying
- *  the extra `simulated` flag (see the note in the report — @tartan/types'
- *  ServerReady has no field for it, so the gateway sends a superset). */
-export type Outgoing = ServerMsg | { type: 'ready'; simulated: boolean };
+ *  the `simulated` flag and the per-call `resumeToken` (rejoin credential —
+ *  the signed call token is single-use and short-lived). */
+export type Outgoing =
+  | ServerMsg
+  | { type: 'ready'; simulated: boolean; resumeToken: string };
 
 export interface InterviewDeps {
   send: (msg: Outgoing) => void;
@@ -97,10 +103,24 @@ export class InterviewSession {
 
   /** Start (or, when resumed=true, resume within the 5-minute window). */
   async start(resumed: boolean): Promise<void> {
-    this.deps.send({ type: 'ready', simulated: this.session.simulated });
+    this.deps.send({
+      type: 'ready',
+      simulated: this.session.simulated,
+      resumeToken: this.session.resumeToken,
+    });
 
     if (!resumed) {
       await markScreenLive(this.session.screenId);
+    } else {
+      // Rehydrate the already-persisted transcript so later persists append
+      // to the full call rather than overwriting it with post-rejoin words.
+      this.transcript = await loadTranscript(this.session.screenId);
+      // A resumed session was frozen mid-pause conceptually; unfreeze cleanly.
+      if (this.session.pausedAtEpoch !== null) {
+        this.session.pausedMs += Date.now() - this.session.pausedAtEpoch;
+        this.session.pausedAtEpoch = null;
+        await saveSession(this.session);
+      }
     }
 
     // Announce the current section + elapsed immediately so a resumed client
@@ -112,7 +132,10 @@ export class InterviewSession {
     this.armBudget();
 
     if (this.session.simulated) {
-      this.enterSimSection(this.session.sectionIndex);
+      // On resume, skip re-running the current section's scripted events —
+      // they already fired before the drop (re-running would duplicate
+      // moments and captions). Only the section-boundary timer is re-armed.
+      this.enterSimSection(this.session.sectionIndex, { skipEvents: resumed });
     } else {
       this.startRealPipeline();
     }
@@ -172,11 +195,14 @@ export class InterviewSession {
 
   // ── simulation driver ────────────────────────────────────────────────────────
 
-  private enterSimSection(index: number): void {
+  private enterSimSection(
+    index: number,
+    opts: { skipEvents?: boolean } = {},
+  ): void {
     if (this.ended) return;
     const script = SIM_SCRIPT[index];
     const durationMs = SIM_SECTION_SECONDS * 1000;
-    if (script) {
+    if (script && !opts.skipEvents) {
       for (const ev of script.events) {
         const delay = Math.max(0, Math.min(1, ev.at)) * durationMs;
         const handle = setTimeout(() => {
@@ -248,6 +274,11 @@ export class InterviewSession {
   }
 
   private async persist(): Promise<void> {
+    // Compliance gate: nothing reaches durable storage until BOTH consent
+    // halves are satisfied. Pre-consent words live only in this process's
+    // memory; maybeStartRecording() flushes the backlog once consent lands,
+    // and a declined call drops it with the audio buffers.
+    if (!consentSatisfied(this.session)) return;
     await persistTranscript(this.session.screenId, this.transcript);
   }
 
@@ -308,6 +339,9 @@ export class InterviewSession {
   private async maybeStartRecording(): Promise<void> {
     if (this.session.recording) return;
     if (!consentSatisfied(this.session)) return;
+    // Consent just became fully satisfied: flush the in-memory transcript
+    // backlog that persist() was withholding pre-consent.
+    void this.persist();
     if (!s3Enabled()) {
       // Consent is satisfied but S3 is not configured (laptop demo): mark the
       // session recording so we do not re-check, but keep audio in memory only.
@@ -454,8 +488,16 @@ export class InterviewSession {
   // ── client control messages ──────────────────────────────────────────────────
 
   async onConsentConfirmed(): Promise<void> {
-    // The in-app consent gate (student checked the boxes). Complements the DB
-    // consents row; either flips the app-consent half of the gate.
+    // The in-app consent gate. The client message is a hint only — the gate
+    // flips on the DB consents row written by startCall for THIS screen, so a
+    // spoofed frame can never open the recording gate.
+    const inDb = await hasAppConsent(this.session.studentId, this.session.screenId);
+    if (!inDb) {
+      log.info('consent_confirmed frame without a DB consents row; ignored', {
+        screenId: this.session.screenId,
+      });
+      return;
+    }
     this.session.consentApp = true;
     await saveSession(this.session);
     await this.maybeStartRecording();
@@ -464,6 +506,12 @@ export class InterviewSession {
   async onPause(): Promise<void> {
     if (this.session.pausedAtEpoch !== null) return;
     this.session.pausedAtEpoch = Date.now();
+    // Freeze the call budget with the clock: elapsed stops accruing while
+    // paused, so the wall-clock timeout must stop counting too.
+    if (this.budgetTimer) {
+      clearTimeout(this.budgetTimer);
+      this.budgetTimer = undefined;
+    }
     await saveSession(this.session);
   }
 
@@ -471,6 +519,7 @@ export class InterviewSession {
     if (this.session.pausedAtEpoch === null) return;
     this.session.pausedMs += Date.now() - this.session.pausedAtEpoch;
     this.session.pausedAtEpoch = null;
+    this.armBudget();
     await saveSession(this.session);
   }
 
@@ -492,6 +541,7 @@ export class InterviewSession {
       await markStruck(this.session.screenId);
       this.session.status = 'ended';
       await saveSession(this.session);
+      await deleteSession(this.session.screenId);
       this.deps.send({ type: 'ended', reason });
       this.deps.closeSocket(1000);
       log.info('call ended pre-consent (struck)', { screenId: this.session.screenId, reason });
@@ -510,6 +560,7 @@ export class InterviewSession {
 
     this.session.status = 'ended';
     await saveSession(this.session);
+    await deleteSession(this.session.screenId);
     this.deps.send({ type: 'ended', reason });
     this.deps.closeSocket(1000);
     log.info('call ended', { screenId: this.session.screenId, reason, audioKey });
@@ -542,6 +593,9 @@ export class InterviewSession {
       this.session.recording = false;
     }
     await saveSession(this.session);
+    // Shorten the Redis TTL to the 5-minute rejoin window; the resume token
+    // in the client's ready frame reconnects into this frozen state.
+    await markResumable(this.session.screenId);
   }
 
   sendError(code: ServerError['code'], message: string): void {

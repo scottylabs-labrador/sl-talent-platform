@@ -33,7 +33,8 @@ import { bullConnection } from '../redis.js';
 import { QUEUE_PREFIX, DRY_RUN } from '../env.js';
 import { log } from '../logger.js';
 import { subjectHash, appendLedger } from '../ledger.js';
-import { writeConfig } from '../config.js';
+import { readConfig, writeConfig } from '../config.js';
+import { exportConfigKey } from '@tartan/types';
 import {
   deleteKeys,
   putBytes,
@@ -112,6 +113,11 @@ async function removeStudentJobs(
     queues.verification,
     queues.matching,
     queues.notifications,
+    queues.ledgerFanout,
+    // The deletion queue itself: pending export/purge jobs for this student
+    // are moot once the account is gone (the in-flight delete job is active,
+    // not pending, so it is never self-removed).
+    queues.deletion,
   ];
   let removed = 0;
   for (const q of scanQueues) {
@@ -154,11 +160,20 @@ async function fullDelete(studentId: string): Promise<void> {
   const { screenIds, audioKeys, clipKeys } = await gatherScreenKeys(studentId);
   const removedJobs = await removeStudentJobs(studentId, screenIds);
 
+  // Anonymize-then-delete (compliance order): first stamp every historical
+  // ledger row with the salted subject hash while nulling identity — the
+  // append-only trigger permits exactly this mutation — so the audit trail
+  // stays correlatable without retaining who it was. Only then cascade the
+  // identity rows (a plain FK SET NULL would lose the hash forever).
+  await db()
+    .update(ledgerEvents)
+    .set({ studentId: null, subjectHash: subjectHash(studentId) })
+    .where(eq(ledgerEvents.studentId, studentId));
+
   // Cascade delete. shortlist_entries.student_id is ON DELETE RESTRICT, so it
   // must go first; deleting the student then cascades screens/evidence/stories/
   // moments/dossiers/coaching/consents; deleting the user is the final identity
-  // removal. ledger_events.student_id is ON DELETE SET NULL (rows survive,
-  // de-identified).
+  // removal.
   await db().transaction(async (tx) => {
     await tx
       .delete(shortlistEntries)
@@ -175,7 +190,7 @@ async function fullDelete(studentId: string): Promise<void> {
   ]);
 
   // Drop any stashed export pointer.
-  await db().delete(config).where(eq(config.key, `export.${studentId}`));
+  await db().delete(config).where(eq(config.key, exportConfigKey(studentId)));
 
   // Final audit row: student_id nulled to a salted hash so the deletion itself
   // is auditable without retaining identity. No 'delete' ledger kind exists;
@@ -319,12 +334,21 @@ async function exportStudent(studentId: string): Promise<void> {
     log.warn(SCOPE, 'S3 not configured; export not uploaded', { studentId });
   }
 
-  await writeConfig(`export.${studentId}`, {
+  // The web wrote {state:'pending', requestedAt} when the student asked;
+  // preserve requestedAt and flip the same key to ready (ExportStatus shape
+  // from @tartan/types jobs.ts — the student surface polls this).
+  const prior = await readConfig<{ requestedAt?: string } | null>(
+    exportConfigKey(studentId),
+    null,
+  );
+  await writeConfig(exportConfigKey(studentId), {
+    state: url ? 'ready' : 'failed',
+    requestedAt: prior?.requestedAt ?? new Date().toISOString(),
+    readyAt: new Date().toISOString(),
+    url: url ?? undefined,
+    error: url ? undefined : 's3 not configured or presign failed',
     key,
-    url: url ?? null,
-    generatedAt: new Date().toISOString(),
     expiresAt,
-    uploaded: s3Configured(),
   });
 
   await appendLedger([

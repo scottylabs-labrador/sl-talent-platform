@@ -90,6 +90,7 @@ export function useVoiceSession(opts: VoiceSessionOptions): VoiceSession {
   const startedAtRef = useRef<number>(0);
   const intentionalCloseRef = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resumeTokenRef = useRef<string | null>(null);
 
   // audio in/out (real mode only)
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -181,6 +182,8 @@ export function useVoiceSession(opts: VoiceSessionOptions): VoiceSession {
               ? (raw as { simulated: boolean }).simulated
               : (simulatedHint ?? true);
           setSimulated(sim);
+          const rt = (raw as { resumeToken?: unknown }).resumeToken;
+          if (typeof rt === 'string' && rt) resumeTokenRef.current = rt;
           // We already collected app consent on the consent screen; confirm it.
           send({ type: 'consent_confirmed' });
           if (!sim) void startMic();
@@ -239,7 +242,12 @@ export function useVoiceSession(opts: VoiceSessionOptions): VoiceSession {
 
   const connect = useCallback(() => {
     if (!wsUrl || !token) return;
-    const url = `${wsUrl}?token=${encodeURIComponent(token)}`;
+    // First connect authenticates with the (single-use) signed call token;
+    // reconnects use the per-call resume token handed over in `ready`.
+    const resume = resumeTokenRef.current;
+    const url = resume
+      ? `${wsUrl}?resume=${encodeURIComponent(resume)}`
+      : `${wsUrl}?token=${encodeURIComponent(token)}`;
     let ws: WebSocket;
     try {
       ws = new WebSocket(url);

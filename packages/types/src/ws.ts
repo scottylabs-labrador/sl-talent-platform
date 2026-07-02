@@ -64,6 +64,10 @@ export const ServerReady = z.object({
   // True when the gateway runs the scripted simulation (no Cartesia key or
   // VOICE_SIMULATION=true). Clients skip mic capture in simulated sessions.
   simulated: z.boolean().optional(),
+  // Per-call rejoin credential. The signed call token is single-use and
+  // short-lived; a dropped client reconnects with ?resume=<this> within the
+  // 5-minute rejoin window.
+  resumeToken: z.string().optional(),
 });
 export type ServerReady = z.infer<typeof ServerReady>;
 

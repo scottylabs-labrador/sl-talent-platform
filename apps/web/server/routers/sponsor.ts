@@ -65,6 +65,7 @@ import {
 import { writeLedgerEvent } from '@/lib/ledger';
 import { enqueueMatching } from '@/lib/redis';
 import { formatCompRange } from '@/lib/format';
+import { visibleStudents, type VisibleStudent } from '@/lib/visibility';
 import { router, sponsorProcedure } from '../trpc';
 
 // ── constants ────────────────────────────────────────────────────────────────
@@ -76,25 +77,6 @@ const SLA_HOURS = 72;
 const SCOPE_NOTE =
   'This prototype builds the complete dossier for June Park, rank 1. Open hers for the full Summary, Evidence, Screen and Logistics experience; every candidate gets the same structure in production.';
 
-// A row in the sponsor_visible_students view (the one place visibility lives).
-interface VisibleStudent {
-  student_id: string;
-  user_id: string;
-  name: string;
-  andrew_id: string | null;
-  program: string | null;
-  grad_date: Date | null;
-  kind: 'undergrad' | 'grad' | 'alum';
-  visibility: 'searchable' | 'match_only' | 'paused';
-  locations: string[] | null;
-  work_auth: { status: string; needsSponsorship: boolean; note?: string } | null;
-  freshness_score: number | null;
-  last_verified_at: Date | null;
-  screen_id: string;
-  dossier_id: string;
-  directory_listable: boolean;
-  reveal_required: boolean;
-}
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -107,20 +89,8 @@ async function readConfig<T>(key: string): Promise<T | null> {
   return (rows[0]?.value as T | undefined) ?? null;
 }
 
-/** Look up the visibility-view rows for a set of student ids (empty-safe). */
-async function visibleStudents(
-  ids: readonly string[],
-): Promise<Map<string, VisibleStudent>> {
-  const map = new Map<string, VisibleStudent>();
-  if (ids.length === 0) return map;
-  const sql = rawSql();
-  const rows = (await sql`
-    SELECT * FROM sponsor_visible_students
-    WHERE student_id IN ${sql(ids as string[])}
-  `) as unknown as VisibleStudent[];
-  for (const r of rows) map.set(r.student_id, r);
-  return map;
-}
+// visibleStudents lives in @/lib/visibility — shared with the audio stream
+// route so both enforce the same single visibility authority.
 
 /** The sticky requirements summary rows, derived from jobs.requirements. */
 function buildSummaryRows(
@@ -192,7 +162,15 @@ async function entryInOrg(
     .from(shortlistEntries)
     .innerJoin(shortlists, eq(shortlists.id, shortlistEntries.shortlistId))
     .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
-    .where(and(eq(shortlistEntries.id, entryId), eq(jobs.orgId, orgId)))
+    .where(
+      and(
+        eq(shortlistEntries.id, entryId),
+        eq(jobs.orgId, orgId),
+        // Human gate: sponsors only ever see delivered shortlists. Assembling
+        // and human_gate slates are ops-only until an operator approves.
+        eq(shortlists.status, 'delivered'),
+      ),
+    )
     .limit(1);
   const row = rows[0];
   return row ? { entry: row.entry, jobId: row.jobId } : null;
@@ -588,7 +566,14 @@ export const sponsorRouter = router({
         .select({ shortlist: shortlists, job: jobs })
         .from(shortlists)
         .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
-        .where(and(eq(shortlists.id, input.shortlistId), eq(jobs.orgId, orgId)))
+        .where(
+          and(
+            eq(shortlists.id, input.shortlistId),
+            eq(jobs.orgId, orgId),
+            // Human gate: undelivered slates are ops-only.
+            eq(shortlists.status, 'delivered'),
+          ),
+        )
         .limit(1);
       if (!sl) throw new TRPCError({ code: 'NOT_FOUND', message: 'shortlist' });
 
@@ -602,14 +587,17 @@ export const sponsorRouter = router({
 
       const candidates: CandidateCard[] = entries.map((e) => {
         const v = visible.get(e.studentId);
-        // match_only without granted reveal → anonymize identity.
+        // match_only without granted reveal → anonymize identity. A student
+        // absent from the visibility view (paused / unpublished since
+        // delivery) is redacted the same way — identity never leaks past the
+        // view, even on an already-delivered shortlist.
         const anonymized =
-          e.kind === 'match_only' && e.revealConsent !== 'granted';
+          (e.kind === 'match_only' && e.revealConsent !== 'granted') || !v;
         return {
           entryId: e.id,
           studentId: anonymized ? null : e.studentId,
           rank: e.rank,
-          name: anonymized ? 'Match-only candidate' : v?.name ?? 'Candidate',
+          name: anonymized ? 'Match-only candidate' : v.name,
           anonymized,
           avatarColor: anonymized ? '#c7d2dc' : '#063f58',
           kind: e.kind,
@@ -626,7 +614,11 @@ export const sponsorRouter = router({
       // One 'shortlist' view ledger event per (student, delivery), deduped so
       // repeated loads never spam the ledger.
       const studentIds = entries
-        .filter((e) => !(e.kind === 'match_only' && e.revealConsent !== 'granted'))
+        .filter(
+          (e) =>
+            visible.has(e.studentId) &&
+            !(e.kind === 'match_only' && e.revealConsent !== 'granted'),
+        )
         .map((e) => e.studentId);
       if (studentIds.length) {
         const sql = rawSql();

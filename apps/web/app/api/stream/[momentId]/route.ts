@@ -24,6 +24,7 @@ import {
 import { auth } from '@/auth';
 import { presignGetUrl } from '@/lib/s3';
 import { writeLedgerEvent } from '@/lib/ledger';
+import { visibleStudents } from '@/lib/visibility';
 
 const LICENSE = 'Premier: internal recruiting use only';
 
@@ -75,9 +76,16 @@ export async function GET(
     actorId = user.studentId;
     license = null;
   } else if (user.role === 'sponsor' && user.orgId) {
-    // The org must have this student on a shortlist under a job it owns.
+    // The org must have this student on a DELIVERED shortlist under a job it
+    // owns (human gate), the student must pass the sponsor_visible_students
+    // view (visibility + published/approved dossier — the one visibility
+    // authority), and a match_only student additionally needs granted reveal.
     const grant = await db()
-      .select({ entryId: shortlistEntries.id })
+      .select({
+        entryId: shortlistEntries.id,
+        kind: shortlistEntries.kind,
+        revealConsent: shortlistEntries.revealConsent,
+      })
       .from(shortlistEntries)
       .innerJoin(shortlists, eq(shortlists.id, shortlistEntries.shortlistId))
       .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
@@ -85,10 +93,20 @@ export async function GET(
         and(
           eq(shortlistEntries.studentId, studentId),
           eq(jobs.orgId, user.orgId),
+          eq(shortlists.status, 'delivered'),
         ),
       )
       .limit(1);
     if (!grant[0]) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    const visible = await visibleStudents([studentId]);
+    const v = visible.get(studentId);
+    if (!v) {
+      // Paused / unpublished students are never streamable by sponsors.
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+    if (v.reveal_required && grant[0].revealConsent !== 'granted') {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
     actorKind = 'sponsor';

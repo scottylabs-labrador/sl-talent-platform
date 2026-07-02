@@ -106,7 +106,7 @@ export function MatchesScreen() {
           {/* Role card */}
           <div style={{ background: '#fff', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 11, boxShadow: 'var(--shadow-resting)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Avatar size={32} radius={8} fontSize={13}>{match.company[0]}</Avatar>
+              <Avatar size={32} radius={8} fontSize={13} company>{match.company[0]}</Avatar>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{match.roleTitle}</div>
                 <div style={{ fontSize: 11.5, color: '#5f6f7f' }}>{match.company} · Pittsburgh or Kirkland</div>

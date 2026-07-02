@@ -1,6 +1,7 @@
 // Per-socket handler: token auth, protocol validation, heartbeat liveness, and
 // wiring the browser <-> InterviewSession. One ConnectionHandler per WS.
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { parseClientMsg } from '@tartan/types';
 import type { ServerError } from '@tartan/types';
@@ -11,9 +12,16 @@ import {
   saveSession,
   type CallSession,
 } from './session.js';
+import { getRedis } from './redis.js';
 import { hasAppConsent } from './store.js';
 import { InterviewSession, type Outgoing, isSimulation } from './interview.js';
 import { log } from './log.js';
+
+function tokensMatch(a: string, b: string): boolean {
+  const ha = createHash('sha256').update(a).digest();
+  const hb = createHash('sha256').update(b).digest();
+  return timingSafeEqual(ha, hb);
+}
 
 export class ConnectionHandler {
   /** Heartbeat liveness flag, flipped by the server's ping loop. */
@@ -23,29 +31,73 @@ export class ConnectionHandler {
   private initialized = false;
   private studentId = '';
   private closed = false;
+  /** Set when this connection authenticated via the session resume token. */
+  private resumeAuthenticated = false;
 
   constructor(
     private readonly ws: WebSocket,
     private readonly screenId: string,
     private readonly token: string | null,
+    private readonly resume: string | null = null,
   ) {}
 
-  start(): void {
+  async start(): Promise<void> {
     this.ws.binaryType = 'nodebuffer';
 
-    // Authenticate before anything else.
-    const v = verifyCallToken(this.token);
-    if (!v.ok) {
-      this.error('unauthorized', `auth failed: ${v.reason}`);
-      this.ws.close(1008, 'unauthorized');
-      return;
+    // Authenticate before anything else. Two paths:
+    //  • a fresh signed call token (single-use: replays within the TTL are
+    //    rejected via a Redis consume marker), or
+    //  • the per-call resume token from the ready frame, valid only while the
+    //    session is inside the rejoin window.
+    if (this.resume) {
+      const existing = await loadSession(this.screenId).catch(() => null);
+      if (
+        !existing ||
+        existing.status !== 'active' ||
+        !existing.resumeToken ||
+        !tokensMatch(existing.resumeToken, this.resume)
+      ) {
+        this.error('unauthorized', 'invalid or expired resume token');
+        this.ws.close(1008, 'unauthorized');
+        return;
+      }
+      this.studentId = existing.studentId;
+      this.resumeAuthenticated = true;
+    } else {
+      const v = verifyCallToken(this.token);
+      if (!v.ok) {
+        this.error('unauthorized', `auth failed: ${v.reason}`);
+        this.ws.close(1008, 'unauthorized');
+        return;
+      }
+      if (v.payload.screenId !== this.screenId) {
+        this.error('unauthorized', 'token screenId does not match path');
+        this.ws.close(1008, 'unauthorized');
+        return;
+      }
+      // Single-use: consume the token; a second connect with the same token
+      // is a replay and is refused (reconnects use the resume token).
+      try {
+        const digest = createHash('sha256').update(this.token ?? '').digest('hex');
+        const fresh = await getRedis().set(
+          `calltoken:${digest}`,
+          '1',
+          'EX',
+          300,
+          'NX',
+        );
+        if (fresh === null) {
+          this.error('unauthorized', 'token already used');
+          this.ws.close(1008, 'unauthorized');
+          return;
+        }
+      } catch (e) {
+        // Redis unavailable: fall back to signature+TTL auth alone rather
+        // than refusing every call.
+        log.error('token consume failed (continuing)', e);
+      }
+      this.studentId = v.payload.studentId;
     }
-    if (v.payload.screenId !== this.screenId) {
-      this.error('unauthorized', 'token screenId does not match path');
-      this.ws.close(1008, 'unauthorized');
-      return;
-    }
-    this.studentId = v.payload.studentId;
 
     this.ws.on('message', (data: Buffer, isBinary: boolean) => {
       if (isBinary) this.onBinary(data);
@@ -173,8 +225,13 @@ export class ConnectionHandler {
         session = existing;
         resumed = true;
         log.info('resuming call within rejoin window', { screenId: this.screenId });
+      } else if (this.resumeAuthenticated) {
+        // Resume-token auth is only valid against a live session.
+        this.error('session_not_found', 'rejoin window has closed');
+        this.closeSocket(1008);
+        return;
       } else {
-        const consentApp = await hasAppConsent(this.studentId);
+        const consentApp = await hasAppConsent(this.studentId, this.screenId);
         session = newSession({
           screenId: this.screenId,
           studentId: this.studentId,

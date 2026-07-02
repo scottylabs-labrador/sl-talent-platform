@@ -634,6 +634,7 @@ export const ExceptionCard = z.object({
   categoryLabel: z.string(),
   categoryTone: z.enum(['amber', 'blue', 'red', 'gray']),
   agent: AgentName,
+  title: z.string(), // one-line card title; resolved rows collapse to it
   quote: z.string(), // agent context quote box
   recommendation: z.string(), // "Recommended:" line
   status: ExceptionStatus,

@@ -1252,8 +1252,8 @@ export async function seed(database: Database): Promise<SeedResult> {
       { code: 'ec08', category: 'sla_risk' as const, agent: 'sentinel' as const, short: 'Sentinel', title: 'Shortlist for role 1 trending 2h from the 72h SLA edge', context: 'Recruiter longlist was slower than usual; Sentinel flagged the risk early. Extra evaluation capacity was allocated and the shortlist delivered in 41h.', rec: 'No action needed; delivered inside SLA. Logged for capacity planning.', age: '4d', status: 'overridden' as const },
     ];
     const exceptionRows = [
-      ...exOpen.map((e) => ({ id: uid(e.code), category: e.category, agent: e.agent, context: { agent: e.short, quote: e.context, category: e.category, refs: {} }, recommendation: e.rec, status: 'open' as const, resolvedBy: null, resolvedAt: null })),
-      ...exResolved.map((e) => ({ id: uid(e.code), category: e.category, agent: e.agent, context: { agent: e.short, quote: e.context, category: e.category, refs: {} }, recommendation: e.rec, status: e.status, resolvedBy: IDS.users.lena, resolvedAt: D('2026-06-30T12:00:00Z') })),
+      ...exOpen.map((e) => ({ id: uid(e.code), category: e.category, agent: e.agent, context: { agent: e.short, title: e.title, quote: e.context, category: e.category, refs: {} }, recommendation: e.rec, status: 'open' as const, resolvedBy: null, resolvedAt: null })),
+      ...exResolved.map((e) => ({ id: uid(e.code), category: e.category, agent: e.agent, context: { agent: e.short, title: e.title, quote: e.context, category: e.category, refs: {} }, recommendation: e.rec, status: e.status, resolvedBy: IDS.users.lena, resolvedAt: D('2026-06-30T12:00:00Z') })),
     ];
     await tx.insert(exceptions).values(exceptionRows as never).onConflictDoUpdate({ target: exceptions.id, set: updateAllExcept(exceptions) });
 

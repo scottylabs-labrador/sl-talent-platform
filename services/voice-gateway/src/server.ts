@@ -38,12 +38,13 @@ export function createGateway(): { start: () => void } {
     }
     const screenId = decodeURIComponent(match[1]);
     const token = url.searchParams.get('token');
+    const resume = url.searchParams.get('resume');
 
     wss.handleUpgrade(req, socket, head, (ws) => {
-      const handler = new ConnectionHandler(ws, screenId, token);
+      const handler = new ConnectionHandler(ws, screenId, token, resume);
       connections.add(handler);
       ws.on('close', () => connections.delete(handler));
-      handler.start();
+      void handler.start();
     });
   });
 

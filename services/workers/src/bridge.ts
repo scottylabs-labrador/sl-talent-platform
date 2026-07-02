@@ -5,23 +5,35 @@
 //   voice-gateway → 'jobs:synthesis'       {screenId}             → synthesis
 //   web (sponsor)  → 'jobs:matching'        {jobId,...}            → matching
 //   web (ops)      → 'jobs:ledger_fanout'   {shortlistId}|{events} → ledger_fanout
+//   web (student)  → 'jobs:verification'    {evidenceId,studentId} → verification
+//   web (student)  → 'jobs:export'          {studentId}            → deletion/export
+//   web (student)  → 'jobs:deletion'        {studentId,...}        → deletion/delete
 //
 // Each list gets its own blocking connection so one slow list never starves
 // another, and shutdown aborts every in-flight BRPOP immediately.
 
 import type { ZodType } from 'zod';
 import type { Queue } from 'bullmq';
+import { JOB_LISTS } from '@tartan/types';
 import type { Redis } from './redis.js';
 import { newRedis } from './redis.js';
 import { queues } from './queues.js';
 import { QUEUE } from './queues.js';
 import { log } from './logger.js';
-import { SynthesisJob, MatchingJob, LedgerFanoutJob } from './jobs.js';
+import {
+  SynthesisJob,
+  MatchingJob,
+  LedgerFanoutJob,
+  VerificationJob,
+  ExportJob,
+  DeletionJob,
+  DELETION_JOB,
+} from './jobs.js';
 
 const SCOPE = 'bridge';
-export const SYNTHESIS_LIST = 'jobs:synthesis';
-export const MATCHING_LIST = 'jobs:matching';
-export const LEDGER_FANOUT_LIST = 'jobs:ledger_fanout';
+export const SYNTHESIS_LIST = JOB_LISTS.synthesis;
+export const MATCHING_LIST = JOB_LISTS.matching;
+export const LEDGER_FANOUT_LIST = JOB_LISTS.ledgerFanout;
 
 export interface Bridge {
   stop: () => Promise<void>;
@@ -61,6 +73,32 @@ const BRIDGES: readonly BridgeDef<unknown>[] = [
       const shortlistId = (d as { shortlistId?: string }).shortlistId;
       return shortlistId ? `ledger_fanout-${shortlistId}` : undefined;
     },
+  } as BridgeDef<unknown>,
+  {
+    list: JOB_LISTS.verification,
+    queue: queues.verification,
+    jobName: QUEUE.verification,
+    schema: VerificationJob,
+    jobId: (d) => {
+      const evidenceId = (d as { evidenceId?: string }).evidenceId;
+      return evidenceId ? `verification-${evidenceId}` : undefined;
+    },
+  } as BridgeDef<unknown>,
+  {
+    list: JOB_LISTS.export,
+    queue: queues.deletion,
+    jobName: DELETION_JOB.export,
+    schema: ExportJob,
+    // No dedupe id: a student may re-request an export after the previous
+    // one expires; each request regenerates the archive.
+  } as BridgeDef<unknown>,
+  {
+    list: JOB_LISTS.deletion,
+    queue: queues.deletion,
+    jobName: DELETION_JOB.delete,
+    // The web sends {studentId, requestedAt}; the worker only needs studentId.
+    schema: DeletionJob.passthrough(),
+    jobId: (d) => `deletion-${(d as { studentId: string }).studentId}`,
   } as BridgeDef<unknown>,
 ];
 
