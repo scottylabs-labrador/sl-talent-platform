@@ -7,6 +7,46 @@
 
 import type { ZodTypeAny, infer as zInfer } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Providers' structured-output implementations (notably Anthropic via
+// OpenRouter) reject constraint keywords like minimum/maximum/minLength.
+// Strip them from the wire schema only — zod still enforces the real
+// constraints when the response is parsed, and the validation-retry loop
+// self-corrects violations.
+const UNSUPPORTED_SCHEMA_KEYS = new Set([
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'minItems',
+  'maxItems',
+  'default',
+]);
+
+function sanitizeWireSchema(node: unknown): unknown {
+  if (Array.isArray(node)) return node.map(sanitizeWireSchema);
+  if (node === null || typeof node !== 'object') return node;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+    if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue;
+    // `properties` maps arbitrary field names (which may collide with the
+    // keyword list) to schemas — recurse into values without key filtering.
+    if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
+      const props: Record<string, unknown> = {};
+      for (const [prop, sub] of Object.entries(value as Record<string, unknown>)) {
+        props[prop] = sanitizeWireSchema(sub);
+      }
+      out[key] = props;
+      continue;
+    }
+    out[key] = sanitizeWireSchema(value);
+  }
+  return out;
+}
 import type { AgentName, AgentRunOutput } from '@tartan/types';
 import { db, agentRuns } from '@tartan/db';
 import { getStubOutput, STUB_TEXT } from './stubs.js';
@@ -337,7 +377,9 @@ export async function runAgent<S extends ZodTypeAny>(
   try {
     // ── Structured output (schema) ──────────────────────────────────────────
     if (opts.schema) {
-      const jsonSchema = zodToJsonSchema(opts.schema, { target: 'openAi' });
+      const jsonSchema = sanitizeWireSchema(
+        zodToJsonSchema(opts.schema, { target: 'openAi' }),
+      );
       const body: Record<string, unknown> = {
         ...baseBody,
         response_format: {
