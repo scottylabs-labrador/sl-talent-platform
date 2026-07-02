@@ -1,0 +1,45 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "globalPassThroughEnv": [
+    "DATABASE_URL",
+    "REDIS_URL",
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "AUTH_TRUST_HOST",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "CARTESIA_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENROUTER_MODEL_REP",
+    "OPENROUTER_MODEL_SYNTH",
+    "OPENROUTER_MODEL_RECRUITER",
+    "OPENROUTER_MODEL_VERIFIER",
+    "OPENROUTER_MODEL_CONCIERGE",
+    "OPENROUTER_MODEL_COACH",
+    "OPENROUTER_MODEL_SENTINEL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "S3_BUCKET",
+    "S3_REGION",
+    "EMBEDDINGS_API_KEY",
+    "APP_URL",
+    "WS_URL",
+    "DEV_LOGIN",
+    "PORT"
+  ],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "lint": {},
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

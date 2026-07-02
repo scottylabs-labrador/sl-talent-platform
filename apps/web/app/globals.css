@@ -1,0 +1,21 @@
+/* ScottyLabs Talent design tokens — populated from the design handoff. */
+:root {
+  --canvas: #f0f4f8;
+  --ink: #1e1e1e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
