@@ -1,0 +1,471 @@
+/* Ops Console — pixel values quoted verbatim from
+ * design_files/Ops Console.dc.html and docs/design-notes/ops-console.md.
+ * This is internal ops chrome: no tartan band, no brand glyph, flat avatar. */
+
+.page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+  color: #1e1e1e;
+  background: #f0f4f8;
+}
+
+/* ── Header (dark bar) ───────────────────────────────────────────────────── */
+.header {
+  height: 56px;
+  background: #1e1e1e;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.hubLink {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: #aebdcc;
+  font-size: 13px;
+  font-weight: 600;
+}
+.hubLink:hover {
+  color: #aebdcc;
+}
+.divider {
+  width: 1px;
+  height: 20px;
+  background: #4a5662;
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.scopePill {
+  font-size: 11px;
+  color: #869db3;
+  border: 1px solid #4a5662;
+  border-radius: 100px;
+  padding: 4px 10px;
+}
+.headerMeta {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.digestStamp {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #869db3;
+}
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #0e96d1;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 12px var(--font-ui);
+}
+
+/* ── Body (two columns) ──────────────────────────────────────────────────── */
+.body {
+  flex: 1;
+  display: flex;
+  gap: 20px;
+  padding: 26px 28px 56px;
+  max-width: 1280px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+  align-items: flex-start;
+}
+
+/* ── Exception queue (left) ──────────────────────────────────────────────── */
+.queue {
+  flex: 1.7;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.queueHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.queueTitleCol {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.queueTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+.queueSubtitle {
+  font-size: 12.5px;
+  color: #5f6f7f;
+}
+.medianStamp {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #5f6f7f;
+}
+
+/* ── Exception card (open) ───────────────────────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1px solid #e9ebf8;
+  border-radius: 12px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(30, 30, 30, 0.04);
+  animation: opsRise 200ms cubic-bezier(0.2, 0, 0, 1);
+}
+.cardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.catTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 4px 8px;
+  flex: none;
+}
+.exTitle {
+  font-size: 14px;
+  font-weight: 600;
+  flex: 1;
+}
+.ageStamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #869db3;
+  flex: none;
+  margin-left: auto;
+}
+.contextBox {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  background: #f8fafc;
+  border: 1px solid #e9ebf8;
+  border-radius: 8px;
+  padding: 10px 13px;
+}
+.agentTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #5f6f7f;
+  border: 1px solid #c7d2dc;
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex: none;
+  margin-top: 1px;
+}
+.contextText {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #38424b;
+}
+.recLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.recIcon {
+  flex: none;
+}
+.recText {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #1e1e1e;
+}
+
+/* ── Actions ─────────────────────────────────────────────────────────────── */
+.actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 2px;
+}
+.approveBtn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 100px;
+  border: none;
+  background: #1e1e1e;
+  color: #fff;
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.approveBtn:hover {
+  background: #383838;
+}
+.outlineBtn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 100px;
+  border: 1px solid #c7d2dc;
+  background: #fff;
+  font: 600 12px var(--font-ui);
+  color: #4a5662;
+  cursor: pointer;
+}
+.outlineBtn:hover {
+  border-color: #869db3;
+}
+
+/* ── Override one-line note ──────────────────────────────────────────────── */
+.overrideForm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 2px;
+}
+.overrideInput {
+  flex: 1;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #c7d2dc;
+  background: #fff;
+  font-size: 12.5px;
+  font-family: var(--font-ui);
+  color: #1e1e1e;
+}
+.overrideInput::placeholder {
+  color: #869db3;
+}
+.overrideInput:focus {
+  outline: 2px solid var(--blue-500);
+  outline-offset: 1px;
+}
+
+/* ── Resolved row (dashed) ───────────────────────────────────────────────── */
+.resolvedRow {
+  border: 1px dashed #c7d2dc;
+  border-radius: 12px;
+  padding: 11px 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  opacity: 0.75;
+}
+.checkIcon {
+  flex: none;
+}
+.resolvedText {
+  font-size: 12.5px;
+  color: #4a5662;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.resolvedStamp {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #869db3;
+  margin-left: auto;
+  flex: none;
+}
+
+/* ── Empty state ─────────────────────────────────────────────────────────── */
+.emptyState {
+  border: 1px dashed #aebdcc;
+  border-radius: 12px;
+  padding: 22px;
+  text-align: center;
+}
+.emptyText {
+  font-size: 13.5px;
+  color: #4a5662;
+}
+
+/* ── Sidebar (right) ─────────────────────────────────────────────────────── */
+.sidebar {
+  width: 320px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: sticky;
+  top: 82px;
+}
+.statsCard {
+  background: #fff;
+  border: 1px solid #e9ebf8;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  box-shadow: 0 1px 2px rgba(30, 30, 30, 0.04);
+}
+.cardLabel {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #869db3;
+}
+.statRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.statLabel {
+  font-size: 12.5px;
+  color: #4a5662;
+}
+.statValue {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workforceCard {
+  background: #fff;
+  border: 1px solid #e9ebf8;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 2px rgba(30, 30, 30, 0.04);
+}
+.workforceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.workforceRight {
+  font-size: 10.5px;
+  color: #869db3;
+}
+.agentRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 0;
+  border-top: 1px solid #f0f3f9;
+}
+.agentDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.agentNameCol {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 1px;
+}
+.agentName {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.agentNote {
+  font-size: 11px;
+  color: #869db3;
+}
+.agentEval {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: #4a5662;
+  flex: none;
+}
+.agentAut {
+  font-size: 10px;
+  font-weight: 600;
+  color: #0a6b94;
+  background: #e7f5fa;
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex: none;
+}
+.footnote {
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: #869db3;
+}
+
+.adverseCard {
+  background: #063f58;
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.adverseHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adverseHeader {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #90cfea;
+}
+.p2Tag {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #90cfea;
+  border: 1px solid #90cfea;
+  border-radius: 100px;
+  padding: 2px 7px;
+  flex: none;
+  opacity: 0.9;
+}
+.adverseBody {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: #d6ecf7;
+}
+.adverseMeta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #5eb9e0;
+}
+
+@keyframes opsRise {
+  from {
+    transform: translateY(7px);
+  }
+  to {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+}

@@ -59,7 +59,12 @@ export type ClientMsg = z.infer<typeof ClientMsg>;
 
 // ── Server → Client ───────────────────────────────────────────────────────
 
-export const ServerReady = z.object({ type: z.literal('ready') });
+export const ServerReady = z.object({
+  type: z.literal('ready'),
+  // True when the gateway runs the scripted simulation (no Cartesia key or
+  // VOICE_SIMULATION=true). Clients skip mic capture in simulated sessions.
+  simulated: z.boolean().optional(),
+});
 export type ServerReady = z.infer<typeof ServerReady>;
 
 export const ServerCaption = z.object({

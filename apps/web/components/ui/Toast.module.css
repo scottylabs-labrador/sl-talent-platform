@@ -1,0 +1,29 @@
+/* Toast — bottom-center black pill, one at a time. A new toast replaces the
+ * current one (clears the prior timer). README anatomy, verbatim. */
+
+.viewport {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99;
+  pointer-events: none;
+}
+
+.toast {
+  display: inline-flex;
+  align-items: center;
+  background: var(--ink-900);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  border-radius: var(--radius-pill);
+  padding: 12px 22px;
+  box-shadow: var(--shadow-toast);
+  animation: slfade 200ms var(--ease-standard);
+  pointer-events: auto;
+  max-width: min(90vw, 420px);
+  text-align: center;
+}

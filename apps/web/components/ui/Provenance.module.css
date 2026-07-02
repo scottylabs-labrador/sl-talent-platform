@@ -1,0 +1,86 @@
+/* Provenance grammar — the five states, identical on every surface, never
+ * shamed (no red, no warning iconography). From tokens-and-canonical.md. */
+
+/* ── ProvenanceEdge: evidence card with a 3px provenance-colored left edge ─ */
+.edge {
+  border: 1px solid var(--hair-2);
+  border-radius: var(--radius-input);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--card);
+}
+.edge.verified {
+  border-left: 3px solid var(--prov-verified);
+}
+.edge.audio {
+  border-left: 3px solid var(--prov-audio);
+}
+.edge.pending {
+  border-left: 3px solid var(--prov-pending);
+  background: var(--amber-050);
+}
+.edge.self_reported {
+  border: 1px dashed var(--prov-self);
+}
+.edge.missing {
+  border: 1px dashed var(--prov-missing);
+  opacity: var(--prov-missing-opacity);
+}
+
+/* ── ProvenanceChip: skill / claim chip carrying its provenance state ────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-card); /* README: skill chips radius 12 */
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  width: fit-content;
+  white-space: nowrap;
+  cursor: default;
+}
+.chip.selectable {
+  cursor: pointer;
+}
+
+/* Selected is an interaction state, not a provenance state. */
+.chip.selected {
+  background: var(--deep);
+  color: #fff;
+  border-color: transparent;
+}
+.chip.verified {
+  background: var(--blue-050);
+  color: var(--blue-text);
+  border-color: var(--prov-verified-border);
+}
+.chip.self_reported {
+  background: transparent;
+  color: var(--prov-self-text);
+  border-style: dashed;
+  border-color: var(--prov-self);
+}
+.chip.pending {
+  background: var(--amber-050);
+  color: var(--prov-pending-text);
+  border-color: var(--prov-pending);
+}
+.chip.audio {
+  background: var(--purple-050);
+  color: var(--prov-audio-text);
+  border-color: var(--prov-audio);
+}
+.chip.missing {
+  background: transparent;
+  color: var(--prov-missing-text);
+  border-style: dashed;
+  border-color: var(--prov-missing);
+  opacity: var(--prov-missing-opacity);
+}

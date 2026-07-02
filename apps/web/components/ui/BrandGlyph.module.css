@@ -1,0 +1,29 @@
+/* BrandGlyph — the ScottyLabs mark: white Scotty monogram inside a
+ * conic-gradient tile. Verbatim conic recipe from the Sponsor Portal source.
+ * Never colored, never on photography. */
+
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  color: #fff; /* monogram fill = currentColor */
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    #d72444 0%,
+    #8766d4 25%,
+    #0e96d1 55%,
+    #063f58 80%,
+    #d72444 100%
+  );
+}
+
+.tile svg {
+  display: block;
+  fill: currentColor;
+}
+
+/* Header tile (34px): inset shadow. The 30px Concierge tile omits it. */
+.inset {
+  box-shadow: inset 0 -5px 12px rgba(0, 0, 0, 0.25);
+}

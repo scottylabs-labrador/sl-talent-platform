@@ -1,0 +1,42 @@
+/* StatusDot — a small filled circle for status/health rows. */
+
+.dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-gray);
+}
+.green {
+  background: var(--status-green);
+}
+.amber {
+  background: var(--status-amber);
+}
+.red {
+  background: var(--status-red);
+}
+.gray {
+  background: var(--status-gray);
+}
+.blue {
+  background: var(--status-blue);
+}
+.purple {
+  background: var(--status-purple);
+}
+
+/* Soft pulse for "live" states. */
+.pulse {
+  animation: slpulse-dot 1600ms var(--ease-standard) infinite;
+}
+@keyframes slpulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}

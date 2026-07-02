@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { TRPCProvider } from '@/lib/trpc/client';
+import { ToastProvider } from '@/components/ui';
 
 export const metadata: Metadata = {
   title: 'ScottyLabs Talent',
@@ -26,7 +28,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <TRPCProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </TRPCProvider>
+      </body>
     </html>
   );
 }

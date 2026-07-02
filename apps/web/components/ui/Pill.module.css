@@ -1,0 +1,105 @@
+/* Pill — the one button primitive. 100px radius, hover darkens (never scales),
+ * 44px tap-target default. Every button in the app is a Pill. */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    background-color var(--dur-ui) var(--ease-standard),
+    border-color var(--dur-ui) var(--ease-standard),
+    color var(--dur-ui) var(--ease-standard);
+  user-select: none;
+}
+
+.pill:disabled,
+.pill[aria-disabled='true'] {
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sizes */
+.sm {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 11px;
+}
+.md {
+  height: 44px;
+}
+.lg {
+  height: 48px;
+  padding: 0 24px;
+  font-size: 14px;
+}
+.block {
+  width: 100%;
+}
+
+/* ── Variants ─────────────────────────────────────────────────────────── */
+
+/* Primary ink — the default consequential action. */
+.primary {
+  background: var(--ink-900);
+  color: #fff;
+}
+.primary:hover {
+  background: var(--ink-800);
+}
+
+/* Accent — the branded affirmative (login, publish). */
+.accent {
+  background: var(--blue-500);
+  color: #fff;
+}
+.accent:hover {
+  background: var(--blue-600);
+}
+
+/* Secondary — white with a hairline border. */
+.secondary {
+  background: #fff;
+  color: var(--ink-600);
+  border-color: var(--ink-250);
+}
+.secondary:hover {
+  background: var(--well);
+  border-color: var(--ink-300);
+}
+
+/* Danger — destructive confirm. */
+.danger {
+  background: var(--red-500);
+  color: #fff;
+}
+.danger:hover {
+  background: var(--red-600);
+}
+
+/* Ghost — text-weight action, no chrome until hover. */
+.ghost {
+  background: transparent;
+  color: var(--ink-600);
+}
+.ghost:hover {
+  background: var(--well);
+}
+
+/* Disabled visual (also apply the `disabled` attr for behavior). */
+.disabled {
+  background: var(--ink-250) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+}

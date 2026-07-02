@@ -1,0 +1,69 @@
+/* Tag — 11px/600, radius 4. Small labels and evidence chips. Color variants
+ * map to the status + provenance palette. Never a pill (that's for buttons). */
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-tag);
+  padding: 3px 7px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Uppercase mono/label variant (e.g. "Rep's note", provenance captions). */
+.uppercase {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+}
+
+/* ── Color variants ───────────────────────────────────────────────────── */
+
+.neutral {
+  background: var(--well);
+  color: var(--ink-600);
+  border-color: var(--hair-1);
+}
+
+/* Verified / accent tint — the default evidence chip. */
+.info {
+  background: var(--blue-050);
+  color: var(--blue-text);
+  border-color: var(--blue-200);
+}
+
+.green {
+  background: var(--green-050);
+  color: var(--green-900);
+  border-color: transparent;
+}
+
+.amber {
+  background: var(--amber-050);
+  color: var(--amber-900);
+  border-color: transparent;
+}
+
+.red {
+  background: var(--red-050);
+  color: var(--red-900);
+  border-color: var(--red-200);
+}
+
+.purple {
+  background: var(--purple-050);
+  color: var(--purple-900);
+  border-color: transparent;
+}
+
+/* Solid ink pill-ish tag (badges). */
+.ink {
+  background: var(--ink-900);
+  color: #fff;
+  border-color: transparent;
+}

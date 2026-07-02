@@ -1,0 +1,363 @@
+/* DossierView modal — verbatim geometry from "Sponsor Portal.dc.html". */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: var(--overlay-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+.modal {
+  width: 880px;
+  max-width: 96vw;
+  max-height: 90vh;
+  background: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  box-shadow: var(--shadow-modal);
+  animation: slrise 220ms var(--ease-standard);
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.loading {
+  min-height: 320px;
+}
+
+/* Header */
+.header {
+  padding: 20px 24px 14px;
+  border-bottom: 1px solid var(--hair-2);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 13px;
+  color: #fff;
+  font: 600 17px var(--font-ui);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.headerCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -0.015em;
+}
+.ssoTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+  background: #e7f5fa;
+  border: 1px solid #90cfea;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.meta {
+  font-size: 12.5px;
+  color: var(--ink-500);
+}
+.close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  flex: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-600);
+}
+.close:hover {
+  border-color: var(--ink-400);
+}
+
+/* Tabs */
+.tabs {
+  padding: 12px 24px 0;
+  display: flex;
+  gap: 8px;
+}
+.tab {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  color: var(--ink-600);
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.tabActive {
+  background: var(--ink-900);
+  color: #fff;
+  border-color: var(--ink-900);
+}
+.tabContent {
+  flex: 1;
+  overflow: auto;
+  padding: 18px 24px 24px;
+}
+.plain {
+  font-size: 13px;
+  color: var(--ink-500);
+}
+
+/* Rationale panel (shared: summary + scope note) */
+.rationalePanel {
+  background: var(--well);
+  border: 1px solid var(--hair-2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.rationaleEyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+}
+.rationaleBody {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-900);
+}
+
+/* Scope note (non-June fallback) */
+.scopeWrap {
+  padding: 20px 24px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.scopeNote {
+  border: 1px dashed var(--ink-300);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-500);
+}
+
+/* Summary tab */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.summaryGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.summaryLeft,
+.summaryRight {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.groupLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-400);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.compRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.compName {
+  font-size: 13px;
+  color: var(--ink-900);
+  flex: 1;
+}
+.dots {
+  display: flex;
+  gap: 3px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.compLink {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--blue-500);
+  width: 70px;
+  text-align: right;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+}
+.compLinkStatic {
+  font-size: 10.5px;
+  color: var(--blue-500);
+  width: 70px;
+  text-align: right;
+}
+.flagRow {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.flagTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 7px;
+  flex: none;
+}
+.flagGreen {
+  background: #dcefe0;
+  color: var(--green-900);
+}
+.flagProbe {
+  background: #fdf6e3;
+  color: var(--amber-900);
+}
+.flagText {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-700);
+}
+.followups {
+  border-top: 1px solid var(--hair-2);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.followupRow {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.followupIcon {
+  color: var(--purple-500);
+  margin-top: 2px;
+  flex: none;
+}
+.followupText {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+
+/* Evidence tab */
+.evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.storyCard {
+  border: 1px solid var(--hair-2);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.storyHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.storyTitle {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.provTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 7px;
+  flex: none;
+}
+.provVerified {
+  color: var(--blue-text);
+  background: #e7f5fa;
+  border: 1px solid #90cfea;
+}
+.provPending {
+  color: var(--amber-900);
+  background: #fdf6e3;
+  border: 1px solid var(--amber-500);
+}
+.storyDesc {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--ink-600);
+}
+.evidenceNote {
+  font-size: 11.5px;
+  color: var(--ink-400);
+}
+
+/* Logistics tab */
+.logistics {
+  display: flex;
+  flex-direction: column;
+}
+.logRow {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 14px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--hair-3);
+}
+.logRow:last-child {
+  border-bottom: none;
+}
+.logKey {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  padding-top: 2px;
+}
+.logValue {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}

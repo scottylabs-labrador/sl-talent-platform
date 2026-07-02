@@ -1,0 +1,185 @@
+/* ScottyLabs Talent — design tokens.
+ * Verbatim from docs/design-notes/tokens-and-canonical.md ("Design tokens").
+ * Every value here is a source-of-truth pick; surfaces consume these, never
+ * raw hex. Where the board and README disagreed the README (production) value
+ * is canonical. Do not recolor for "brand" reasons — the provenance/status
+ * pairings are contrast-checked.
+ */
+
+:root {
+  /* ── Fonts ──────────────────────────────────────────────────────────────
+   * Never system-ui for product type. Satoshi = display, Inter = all UI,
+   * JetBrains Mono = codes / timestamps / scores / ids. */
+  --font-display: 'Satoshi', 'Inter', system-ui, sans-serif;
+  --font-ui: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ── Accent blue ────────────────────────────────────────────────────── */
+  --blue-500: #0e96d1; /* primary accent, progress fills, active nav */
+  --blue-600: #0d89be; /* hover for accent */
+  --blue-700: #063f58; /* deep blue: avatars, dark player, selected chip, rubric panel */
+  --blue-400: #5eb9e0; /* dark-card waveform/progress, rubric dots */
+  --blue-300: #90cfea; /* borders (verified chip, elbow connector), dark meta text */
+  --blue-200: #b4def1; /* evidence-chip border */
+  --blue-100: #d6ecf7; /* rubric label text on deep blue */
+  --blue-050: #e7f5fa; /* verified tint fill, chip/tag background */
+  --blue-text: #0a6b94; /* link / accent text on light, verified caption */
+
+  /* Semantic aliases (brief names) */
+  --accent: var(--blue-500);
+  --accent-hover: var(--blue-600);
+  --deep: var(--blue-700);
+  --accent-tint: var(--blue-050);
+
+  /* ── Ink / neutrals ─────────────────────────────────────────────────── */
+  --ink-900: #1e1e1e; /* primary ink, primary buttons */
+  --ink-800: #383838; /* ink hover */
+  --ink-700: #38424b; /* body */
+  --ink-600: #4a5662; /* body secondary, secondary-button text */
+  --ink-500: #5f6f7f; /* muted, mono fit score */
+  --ink-400: #869db3; /* subtle meta, missing caption */
+  --ink-350: #8ba0b3; /* unplayed transcript (light spine) */
+  --ink-300: #aebdcc; /* disabled, rank number, unplayed transcript (canonical) */
+  --ink-250: #c7d2dc; /* borders (secondary button, missing card, disabled) */
+
+  --ink: var(--ink-900);
+
+  /* ── Hairlines ──────────────────────────────────────────────────────── */
+  --hair-1: #d9e1e7; /* hairline */
+  --hair-2: #e9ebf8; /* progress track, evidence-card border, dividers */
+  --hair-3: #f0f3f9; /* faint row divider */
+  --hair-card: rgba(0, 0, 0, 0.08); /* card border */
+
+  /* ── Surfaces ───────────────────────────────────────────────────────── */
+  --canvas: #f0f4f8; /* app canvas */
+  --canvas-board: #f0eee9; /* explorations board only — NOT product */
+  --chrome: #edf1f6;
+  --phone-canvas: #f5f7fa;
+  --well: #f8fafc; /* wells, selected clip row, table header */
+  --card: #ffffff;
+  --call-screen: #070c11;
+
+  /* ── Red ─────────────────────────────────────────────────────────────── */
+  --red-500: #d72444;
+  --red-600: #c4213e;
+  --red-900: #991a30;
+  --red-200: #f3bbc5;
+  --red-050: #fdf2f4;
+
+  /* ── Green ───────────────────────────────────────────────────────────── */
+  --green-500: #3a9a4c;
+  --green-900: #0d4b17;
+  --green-050: #dcefe0;
+
+  /* ── Amber ───────────────────────────────────────────────────────────── */
+  --amber-500: #e8b13a;
+  --amber-900: #654a00;
+  --amber-050: #fdf6e3;
+
+  /* ── Purple ──────────────────────────────────────────────────────────── */
+  --purple-500: #6940c9;
+  --purple-900: #4b2d8f;
+  --purple-050: #d1c4ee;
+  --purple-tile: #8766d4; /* brand-glyph conic stop only */
+
+  /* ── Radii ───────────────────────────────────────────────────────────── */
+  --radius-pill: 100px; /* every button/pill, no exceptions; also progress tracks */
+  --radius-card: 12px; /* standard cards */
+  --radius-card-lg: 14px; /* player card, modals */
+  --radius-modal: 16px; /* dossier / overlays */
+  --radius-graph: 18px; /* Talent Graph / mobile profile cards */
+  --radius-input: 8px; /* inputs, evidence cards, "do this next" box */
+  --radius-tag: 4px; /* tags / chips */
+  --radius-avatar: 11px; /* rounded-square avatars */
+
+  /* ── Shadows ─────────────────────────────────────────────────────────── */
+  --shadow-resting: 0 1px 2px rgba(30, 30, 30, 0.06);
+  --shadow-board: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-board-dark: 0 1px 3px rgba(0, 0, 0, 0.1);
+  --shadow-subcard: 0 1px 2px rgba(30, 30, 30, 0.05);
+  --shadow-raised: 0 2px 8px rgba(30, 30, 30, 0.06);
+  --shadow-modal: 0 24px 64px rgba(6, 14, 20, 0.4);
+  --shadow-toast: 0 8px 24px rgba(30, 30, 30, 0.25);
+  --overlay-modal: rgba(6, 14, 20, 0.52);
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-fast: 90ms; /* progress-bar width (linear) */
+  --dur-word: 100ms; /* transcript color transition */
+  --dur-tick: 100ms; /* playback / caption simulation interval */
+  --dur-ui: 200ms; /* general UI motion (range 120–280ms) */
+  --dur-content: 240ms; /* content change fade + rise 7px */
+  --dur-wave: 800ms; /* slpulse waveform loop */
+  --toast-dismiss: 2800ms; /* canonical (Ops); student 2600, sponsor 3000 */
+
+  /* ── Provenance edge colors (the five states) ────────────────────────── */
+  --prov-verified: #0e96d1; /* verified evidence-card left edge */
+  --prov-verified-border: #90cfea; /* verified chip border */
+  --prov-verified-text: #0a6b94;
+  --prov-self: #aebdcc; /* self-reported dashed border */
+  --prov-self-text: #5f6f7f;
+  --prov-pending: #e8b13a;
+  --prov-pending-text: #654a00;
+  --prov-audio: #6940c9; /* audio-moment left edge */
+  --prov-audio-text: #4b2d8f;
+  --prov-missing: #c7d2dc; /* missing dashed border */
+  --prov-missing-text: #869db3;
+  --prov-missing-opacity: 0.75;
+
+  /* ── Status dot colors ───────────────────────────────────────────────── */
+  --status-green: #3a9a4c;
+  --status-amber: #e8b13a;
+  --status-red: #d72444;
+  --status-gray: #aebdcc;
+  --status-blue: #0e96d1;
+  --status-purple: #6940c9;
+
+  /* ── Tartan band ─────────────────────────────────────────────────────── */
+  --tartan-base: #063f58;
+}
+
+/* Waveform keyframe (verbatim). Applied per bar with transform-origin:bottom,
+ * 800ms ease-in-out infinite, staggered animation-delay, play-state gated. */
+@keyframes slpulse {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Toast entrance (README: slfade 200ms). */
+@keyframes slfade {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* Content change: fade + rise 7px (~240ms). */
+@keyframes slrise {
+  from {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

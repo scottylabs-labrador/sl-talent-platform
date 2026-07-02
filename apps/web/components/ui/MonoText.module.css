@@ -1,0 +1,6 @@
+/* MonoText — JetBrains Mono for codes, timestamps, scores, ids. */
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}

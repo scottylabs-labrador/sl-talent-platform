@@ -1,10 +1,15 @@
-export default function Home() {
+// Student Home at '/'. Anonymous visitors go to /login; sponsors and operators
+// are redirected to their own surfaces by requireSession. Students land here.
+
+import { requireSession } from '@/auth';
+import { StudentShell } from './(student)/_components/StudentShell';
+import { HomeScreen } from './(student)/_components/HomeScreen';
+
+export default async function Page() {
+  await requireSession('student');
   return (
-    <main style={{ padding: 40 }}>
-      <h1 style={{ fontFamily: 'Satoshi, Inter, sans-serif', letterSpacing: '-0.02em' }}>
-        ScottyLabs Talent
-      </h1>
-      <p>Scaffold placeholder. Surfaces land here: student app, sponsor portal, ops console.</p>
-    </main>
+    <StudentShell active="home">
+      <HomeScreen />
+    </StudentShell>
   );
 }

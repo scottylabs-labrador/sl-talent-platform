@@ -1,0 +1,216 @@
+/* Student app surface styles. Pixel values are quoted verbatim from
+ * docs/design-notes/student-app.md and "Student App.dc.html". The phone bezel is
+ * presentation-only and NOT shipped: the app is full-bleed on mobile and sits in
+ * a 390px column on larger screens. */
+
+.shell {
+  min-height: 100dvh;
+  background: var(--canvas); /* #f0f4f8 page canvas */
+  display: flex;
+  justify-content: center;
+}
+
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 390px;
+  min-height: 100dvh;
+  background: var(--phone-canvas); /* #f5f7fa */
+  overflow: hidden;
+}
+
+@media (min-width: 430px) {
+  .phone {
+    box-shadow: 0 8px 40px rgba(30, 30, 30, 0.1);
+  }
+}
+
+.content {
+  min-height: 100dvh;
+  animation: slrise var(--dur-content) var(--ease-standard);
+}
+
+/* ── Tab bar ─────────────────────────────────────────────────────────────── */
+.tabbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 390px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--hair-2);
+  display: flex;
+  padding: 8px 6px calc(26px + env(safe-area-inset-bottom));
+  z-index: 30;
+}
+
+.tab {
+  flex: 1;
+  min-height: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #5f6f7f;
+  text-decoration: none;
+}
+.tab span {
+  font-size: 10px;
+  font-weight: 500;
+}
+.tabActive {
+  color: var(--blue-500);
+}
+.tabActive span {
+  font-weight: 600;
+}
+
+/* ── Buttons (hover darkens, never scales) ───────────────────────────────── */
+.btnDark,
+.btnGhost,
+.btnAccent,
+.btnDanger,
+.btnDisabled {
+  border-radius: 100px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background-color var(--dur-ui) var(--ease-standard),
+    border-color var(--dur-ui) var(--ease-standard);
+}
+.btnDark {
+  background: var(--ink-900);
+  color: #fff;
+  border: none;
+}
+.btnDark:hover {
+  background: var(--ink-800);
+}
+.btnGhost {
+  background: #fff;
+  color: var(--ink-900);
+  border: 1px solid var(--ink-250);
+}
+.btnGhost:hover {
+  border-color: #869db3;
+}
+.btnAccent {
+  background: var(--blue-500);
+  color: #fff;
+  border: none;
+}
+.btnAccent:hover {
+  background: var(--blue-600);
+}
+.btnDanger {
+  background: var(--red-500);
+  color: #fff;
+  border: none;
+}
+.btnDanger:hover {
+  background: var(--red-600);
+}
+.btnDisabled {
+  background: var(--ink-250);
+  color: #fff;
+  border: none;
+  cursor: not-allowed;
+}
+
+/* Dashed nudge box + dossier action, hover accent */
+.nudge {
+  transition: border-color var(--dur-ui) var(--ease-standard);
+}
+.nudge:hover {
+  border-color: var(--blue-500);
+}
+
+/* Sponsor-view toggle */
+.sponsorToggle {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 100px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 12px;
+  background: #fff;
+  color: var(--ink-900);
+  border: 1px solid var(--ink-250);
+  cursor: pointer;
+}
+.sponsorToggleActive {
+  background: var(--blue-700);
+  color: #fff;
+  border-color: var(--blue-700);
+}
+
+/* ── Voice bars ──────────────────────────────────────────────────────────── */
+.voiceBar {
+  border-radius: 2px;
+  transform-origin: bottom;
+  animation: slpulse 900ms ease-in-out infinite;
+}
+.recBar {
+  border-radius: 2px;
+  transform-origin: bottom;
+  animation: slpulse 700ms ease-in-out infinite;
+  background: var(--blue-400);
+}
+
+/* Overlay enter */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  animation: slrise 220ms var(--ease-standard);
+}
+
+/* Sponsor desktop panel (beside the phone) */
+.sponsorLayout {
+  min-height: 100dvh;
+  background: var(--canvas);
+  display: flex;
+  align-items: flex-start;
+  justify-content: safe center;
+  gap: 36px;
+  padding: 44px 32px 64px;
+  overflow-x: auto;
+}
+.sponsorPanel {
+  width: 640px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(30, 30, 30, 0.14);
+  border: 1px solid var(--hair-1);
+  animation: slrise 260ms var(--ease-standard);
+}
+@media (max-width: 1120px) {
+  .sponsorPanel {
+    display: none;
+  }
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: var(--font-ui);
+}

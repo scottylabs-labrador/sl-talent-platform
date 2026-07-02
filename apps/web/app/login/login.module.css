@@ -1,0 +1,86 @@
+.screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--canvas);
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  padding: 32px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.glyph {
+  margin-bottom: 4px;
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink-900);
+  margin: 0;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--ink-500);
+  margin: 0 0 12px;
+  text-align: center;
+}
+
+.form {
+  width: 100%;
+  display: contents;
+}
+
+.actions {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.microcopy {
+  font-size: 12px;
+  color: var(--ink-400);
+  text-align: center;
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+
+/* Demo divider */
+.divider {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 6px;
+  color: var(--ink-400);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hair-1);
+}
+
+.googleG {
+  width: 16px;
+  height: 16px;
+}

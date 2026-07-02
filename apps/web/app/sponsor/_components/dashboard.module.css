@@ -1,0 +1,207 @@
+/* Dashboard — verbatim geometry from "Sponsor Portal.dc.html". */
+
+.wrap {
+  max-width: 1160px;
+  padding: 30px 36px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  animation: slrise 240ms var(--ease-standard);
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.headerCol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.greeting {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--ink-500);
+  margin: 0;
+}
+.postBtn {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--ink-900);
+  color: #fff;
+  font: 600 13px var(--font-ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.postBtn:hover {
+  background: var(--ink-800);
+}
+.postBtn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Stat tiles */
+.statGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.statTile {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: var(--shadow-resting);
+}
+.statNumber {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.statLabel {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-500);
+}
+
+/* Roles table */
+.rolesCard {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-resting);
+}
+.rolesHeader {
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--hair-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.rolesTitle {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rolesSla {
+  font-size: 11.5px;
+  color: var(--ink-400);
+}
+.roleRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--hair-3);
+}
+.roleRow:last-child {
+  border-bottom: none;
+}
+.roleNameCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.roleName {
+  font-size: 14px;
+  font-weight: 600;
+}
+.roleMeta {
+  font-size: 12px;
+  color: var(--ink-400);
+}
+.roleStatus {
+  font-size: 12.5px;
+  color: var(--ink-600);
+  flex: 1.2;
+}
+.slaChip {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 4px 9px;
+  flex: none;
+}
+.roleAction {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  font: 600 12px var(--font-ui);
+  color: var(--ink-900);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.roleAction:hover {
+  border-color: var(--ink-400);
+  background: var(--well);
+  color: var(--ink-900);
+}
+
+/* Concierge card */
+.conciergeCard {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-resting);
+}
+.conciergeHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.conciergeTextCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.conciergeName {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.conciergeCaption {
+  font-size: 11.5px;
+  color: var(--ink-400);
+}
+.chipsRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.conciergeChip {
+  height: 34px;
+  padding: 0 15px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: var(--well);
+  font: 500 12.5px var(--font-ui);
+  color: var(--ink-700);
+  cursor: pointer;
+}
+.conciergeChip:hover {
+  border-color: var(--blue-500);
+  color: var(--blue-text);
+}

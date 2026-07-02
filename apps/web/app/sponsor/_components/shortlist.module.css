@@ -1,0 +1,434 @@
+/* Shortlist + CandidateCard + canonical AudioPlayer — verbatim geometry from
+ * "Sponsor Portal.dc.html" and the README production values for the player. */
+
+/* ── Shortlist page ─────────────────────────────────────────────────────── */
+.wrap {
+  max-width: 1160px;
+  padding: 30px 36px 60px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: slrise 240ms var(--ease-standard);
+}
+.headerCard {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--shadow-raised);
+  display: flex;
+  flex-direction: column;
+}
+.headerBody {
+  padding: 20px 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.headerTextCol {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+}
+.headerTitle {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.funnel {
+  font-size: 12.5px;
+  color: var(--ink-500);
+  margin: 0;
+}
+.headerBtns {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.headerPill {
+  height: 38px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  font: 600 12.5px var(--font-ui);
+  color: var(--ink-900);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.headerPill:hover {
+  border-color: var(--ink-400);
+}
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.honesty {
+  font-size: 12px;
+  color: var(--ink-400);
+  padding: 0 4px;
+  margin: 0;
+}
+
+/* ── CandidateCard ──────────────────────────────────────────────────────── */
+.card {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  padding: 18px 22px;
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  box-shadow: var(--shadow-resting);
+  transition: opacity 180ms var(--ease-standard);
+}
+.rank {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-300);
+  width: 24px;
+  text-align: right;
+  flex: none;
+  padding-top: 6px;
+}
+.avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  color: #fff;
+  font: 600 15px var(--font-ui);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.middle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.name {
+  border: none;
+  background: none;
+  padding: 0;
+  font: 600 15.5px var(--font-ui);
+  color: var(--ink-900);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+}
+.name:hover {
+  color: var(--blue-500);
+}
+.badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 4px;
+  padding: 3px 7px;
+}
+.why {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-700);
+  max-width: 640px;
+  margin: 0;
+}
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.chip {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--blue-text);
+  background: #e7f5fa;
+  border: 1px solid #b4def1;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.passRow {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  background: var(--well);
+  border: 1px dashed var(--ink-250);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.passLabel {
+  font-size: 11.5px;
+  color: var(--ink-500);
+  font-weight: 600;
+}
+.passReason {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  font: 500 11.5px var(--font-ui);
+  color: var(--ink-700);
+  cursor: pointer;
+}
+.passReason:hover {
+  border-color: var(--red-500);
+  color: var(--red-600);
+}
+.actionsCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 9px;
+  flex: none;
+}
+.fit {
+  font-size: 12px;
+  color: var(--ink-500);
+}
+.actionsRow {
+  display: flex;
+  gap: 7px;
+}
+.introBtn {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--ink-900);
+  color: #fff;
+  font: 600 12px var(--font-ui);
+  cursor: pointer;
+}
+.introBtn:hover {
+  background: var(--ink-800);
+}
+.passBtn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  font: 600 12px var(--font-ui);
+  color: var(--ink-600);
+  cursor: pointer;
+}
+.passBtn:hover {
+  border-color: var(--red-500);
+  color: var(--red-600);
+}
+.saveBtn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--ink-250);
+  background: #fff;
+  font: 600 12px var(--font-ui);
+  color: var(--ink-600);
+  cursor: pointer;
+}
+.saveBtn:hover {
+  border-color: var(--ink-400);
+}
+.statusChip {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  font: 600 12px var(--font-ui);
+  display: inline-flex;
+  align-items: center;
+}
+.introChip {
+  background: #dcefe0;
+  color: var(--green-900);
+}
+.passedChip {
+  background: #f0f4f8;
+  color: var(--ink-500);
+}
+.savedChip {
+  background: #e7f5fa;
+  color: var(--blue-text);
+}
+.openDossier {
+  border: none;
+  background: none;
+  padding: 0;
+  font: 600 12px var(--font-ui);
+  color: var(--blue-500);
+  cursor: pointer;
+}
+
+/* ── Canonical AudioPlayer (Screen tab) ─────────────────────────────────── */
+.playerCard {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: var(--shadow-subcard);
+}
+.playerTop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.playBtn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--blue-700);
+  color: #fff;
+  cursor: pointer;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.playBtn:hover {
+  background: #052f43;
+}
+.playerTextCol {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.playerTag {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-900);
+}
+.playerCaption {
+  font-size: 11.5px;
+  color: var(--ink-400);
+}
+.playerTime {
+  font-size: 12px;
+  color: var(--ink-400);
+  flex: none;
+}
+.waveform {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 30px;
+}
+.bar {
+  flex: 1;
+  border-radius: 2px;
+  background: rgba(14, 150, 209, 0.45);
+  transform-origin: bottom;
+  animation: slpulse 800ms ease-in-out infinite;
+}
+.progressTrack {
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--hair-2);
+  overflow: hidden;
+}
+.progressFill {
+  height: 100%;
+  background: var(--blue-500);
+  transition: width 90ms linear;
+}
+.transcript {
+  font-size: 14px;
+  line-height: 1.75;
+  padding-top: 2px;
+}
+.word {
+  transition: color 120ms;
+}
+.repNoteRow {
+  border-top: 1px solid var(--hair-2);
+  padding-top: 10px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.repNoteTag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--blue-text);
+  background: #e7f5fa;
+  border-radius: 4px;
+  padding: 3px 7px;
+  flex: none;
+}
+.repNoteText {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-600);
+}
+.clipList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.clipRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 10px;
+  padding: 11px 14px;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  width: 100%;
+}
+.clipRow:hover {
+  border-color: var(--blue-500);
+}
+.clipSelected {
+  background: var(--well);
+  border-color: #90cfea;
+}
+.clipAt {
+  font-size: 11px;
+  color: var(--blue-500);
+  flex: none;
+}
+.clipTag {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-900);
+  flex: 1;
+}
+.clipDur {
+  font-size: 11px;
+  color: var(--ink-400);
+}

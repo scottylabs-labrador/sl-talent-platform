@@ -1,0 +1,76 @@
+/* Tartan band — the signature. PREMIUM ARTIFACTS ONLY: shortlist header,
+ * dossier spine, dossier cards. Never on buttons, nav, or ordinary cards.
+ *
+ * Two production recipes at different stripe pitches (do not merge):
+ *   student — README canonical (red 5px / white 26–28 / blue rungs 2px·7)
+ *   sponsor — Sponsor Portal (red 6px / white 30–32 / blue rungs 2.5px·8)
+ * Verbatim from docs/design-notes/tokens-and-canonical.md. */
+
+.band {
+  background-color: var(--tartan-base);
+  flex: none;
+}
+
+/* ── Student recipe (Recipe A) ─────────────────────────────────────────── */
+.studentHorizontal {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(215, 36, 68, 0.6) 0 5px,
+      transparent 5px 26px,
+      rgba(255, 255, 255, 0.18) 26px 28px,
+      transparent 28px 52px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(14, 150, 209, 0.5) 0 2px,
+      transparent 2px 7px
+    );
+}
+.studentVertical {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(215, 36, 68, 0.6) 0 5px,
+      transparent 5px 26px,
+      rgba(255, 255, 255, 0.18) 26px 28px,
+      transparent 28px 52px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(14, 150, 209, 0.5) 0 2px,
+      transparent 2px 7px
+    );
+}
+
+/* ── Sponsor-portal recipe (Recipe B) ──────────────────────────────────── */
+.sponsorHorizontal {
+  background-image:
+    repeating-linear-gradient(
+      90deg,
+      rgba(215, 36, 68, 0.6) 0 6px,
+      transparent 6px 30px,
+      rgba(255, 255, 255, 0.18) 30px 32px,
+      transparent 32px 60px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      rgba(14, 150, 209, 0.5) 0 2.5px,
+      transparent 2.5px 8px
+    );
+}
+.sponsorVertical {
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      rgba(215, 36, 68, 0.6) 0 6px,
+      transparent 6px 30px,
+      rgba(255, 255, 255, 0.18) 30px 32px,
+      transparent 32px 60px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(14, 150, 209, 0.5) 0 2.5px,
+      transparent 2.5px 8px
+    );
+}

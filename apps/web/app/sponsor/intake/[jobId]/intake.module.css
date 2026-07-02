@@ -1,0 +1,237 @@
+/* Role intake — verbatim geometry from "Sponsor Portal.dc.html". */
+
+.wrap {
+  max-width: 1160px;
+  padding: 30px 36px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: slrise 240ms var(--ease-standard);
+}
+.headerCol {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.subtitle {
+  font-size: 13px;
+  color: var(--ink-500);
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+/* ── Chat panel ────────────────────────────────────────────────────────── */
+.chatPanel {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-resting);
+}
+.chatHeader {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--hair-2);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.greenDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-green);
+  flex: none;
+}
+.messages {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 340px;
+}
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 82%;
+  animation: slrise 220ms var(--ease-standard);
+}
+.msgMe {
+  align-self: flex-end;
+}
+.msgConcierge {
+  align-self: flex-start;
+}
+.who {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  padding: 0 6px;
+}
+.bubble {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-900);
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.bubbleMe {
+  background: #e7f5fa;
+  border-color: #b4def1;
+}
+.bubbleConcierge {
+  background: #fff;
+  border-color: var(--hair-2);
+}
+
+.composer {
+  padding: 14px 18px;
+  border-top: 1px solid var(--hair-2);
+  background: var(--well);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.input {
+  flex: 1;
+  font-size: 12.5px;
+  color: var(--ink-900);
+  border: 1px solid #e0e6ee;
+  border-radius: var(--radius-pill);
+  padding: 11px 16px;
+  background: #fff;
+  font-family: var(--font-ui);
+}
+.input::placeholder {
+  color: var(--ink-400);
+  font-style: italic;
+}
+.sendBtn {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--ink-900);
+  color: #fff;
+  font: 600 13px var(--font-ui);
+  cursor: pointer;
+}
+.sendBtn:hover {
+  background: var(--ink-800);
+}
+.confirmBtn {
+  flex: 1;
+  height: 44px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--blue-500);
+  color: #fff;
+  font: 600 13.5px var(--font-ui);
+  cursor: pointer;
+}
+.confirmBtn:hover {
+  background: var(--blue-600);
+}
+.confirmBtn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+.doneBanner {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  background: #dcefe0;
+  border-radius: var(--radius-pill);
+  padding: 11px 16px;
+  font: 600 12.5px var(--font-ui);
+  color: var(--green-900);
+}
+.doneBanner svg {
+  color: var(--green-900);
+  flex: none;
+}
+
+/* ── Requirements summary ──────────────────────────────────────────────── */
+.summary {
+  background: #fff;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow-resting);
+  position: sticky;
+  top: 88px;
+}
+.summaryHeader {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--hair-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.summaryBody {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.summaryRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+  margin-top: 5px;
+}
+.summaryTextCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.summaryKey {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+}
+.summaryValue {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-900);
+}
+.slaRow {
+  border-top: 1px solid var(--hair-2);
+  padding-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.slaRow svg {
+  flex: none;
+}

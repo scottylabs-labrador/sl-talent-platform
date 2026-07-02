@@ -1,0 +1,34 @@
+/* Card — white, radius 12, resting shadow. The default container. */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--hair-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-resting);
+}
+
+/* Padding presets (opt in; default is unpadded so callers control it). */
+.pad {
+  padding: 16px 18px;
+}
+.padLg {
+  padding: 20px 22px;
+}
+
+/* Larger radius for player cards / modals. */
+.lg {
+  border-radius: var(--radius-card-lg);
+}
+/* Graph / mobile profile radius. */
+.graph {
+  border-radius: var(--radius-graph);
+}
+
+.raised {
+  box-shadow: var(--shadow-raised);
+}
+
+/* Well surface (selected rows, table headers). */
+.well {
+  background: var(--well);
+}

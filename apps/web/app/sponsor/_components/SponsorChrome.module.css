@@ -1,0 +1,195 @@
+/* Portal chrome — verbatim geometry from "Sponsor Portal.dc.html". */
+
+.shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--canvas);
+  color: var(--ink-900);
+}
+
+/* ── Header (64px, sticky) ─────────────────────────────────────────────── */
+.header {
+  height: 64px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--hair-1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 60;
+}
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.hubLink {
+  text-decoration: none;
+  color: var(--ink-600);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hubLink:hover {
+  color: var(--ink-600);
+}
+.divider {
+  width: 1px;
+  height: 20px;
+  background: var(--ink-250);
+}
+.lockup {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+.brandCaption {
+  font-size: 10.5px;
+  color: var(--ink-500);
+}
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.licensePill {
+  font-size: 11px;
+  color: var(--ink-500);
+  border: 1px solid var(--ink-250);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.askBtn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: var(--ink-900);
+  color: #fff;
+  font: 600 12.5px var(--font-ui);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.askBtn:hover {
+  background: var(--ink-800);
+}
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--purple-500);
+  color: #fff;
+  font: 600 13px var(--font-ui);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+/* ── Body row (sidebar + main) ─────────────────────────────────────────── */
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── Sidebar (208px) ───────────────────────────────────────────────────── */
+.sidebar {
+  width: 208px;
+  flex: none;
+  background: var(--chrome);
+  border-right: 1px solid var(--hair-1);
+  padding: 20px 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.navRow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  font: 500 13.5px var(--font-ui);
+  background: transparent;
+  color: var(--ink-700);
+}
+.navRow:hover {
+  background: #e3e9f0;
+}
+.navActive,
+.navActive:hover {
+  background: #fff;
+  color: var(--blue-500);
+  font-weight: 600;
+}
+.navLabel {
+  flex: 1;
+}
+.p2 {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--ink-400);
+  border: 1px solid var(--ink-250);
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+
+/* Role-slot meter, pinned to the bottom. */
+.meter {
+  margin-top: auto;
+  border-top: 1px solid var(--hair-1);
+  padding: 14px 13px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.meterRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-500);
+}
+.meterTrack {
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: var(--hair-1);
+  overflow: hidden;
+}
+.meterFill {
+  height: 100%;
+  background: var(--blue-500);
+  border-radius: var(--radius-pill);
+}
+.meterCaption {
+  font-size: 10.5px;
+  color: var(--ink-400);
+}
+
+/* ── Main pane ─────────────────────────────────────────────────────────── */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
