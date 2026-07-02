@@ -1,1 +1,24 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds
+.next/
+dist/
+out/
+.turbo/
+*.tsbuildinfo
+
+# env — never commit secrets
 .env
+.env.*
+!.env.example
+
+# internal design handoff (not for the public repo)
+spec-extract/
+*.zip
+
+# misc
+.DS_Store
+*.log
+coverage/
