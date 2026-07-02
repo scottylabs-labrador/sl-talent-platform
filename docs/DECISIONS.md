@@ -64,7 +64,7 @@ of these per environment via `OPENROUTER_MODEL_*`.
 
 | Agent | Model | Price | Rationale |
 | --- | --- | --- | --- |
-| rep | `google/gemini-3.5-flash` | 1.50 / 9 | Realtime voice loop: latency beats brilliance. Latency-optimized frontier flash; ~$0.50 LLM cost per 30-min screen with caching. |
+| rep | `anthropic/claude-haiku-4.5` | 1 / 5 | Realtime voice loop: latency beats brilliance. Live-tested via OpenRouter: 0.90s first token streaming, clean tool calls, warm tone. (`google/gemini-3.5-flash` was rejected after live testing: OpenRouter mandates reasoning on that endpoint, pushing first-token latency to 2.5s. `google/gemini-3.1-flash-lite` at 0.73s TTFT is the budget alternative.) |
 | synthesizer | `anthropic/claude-opus-4.8` | 5 / 25 | The dossier is the product artifact. ~$0.20 per screen at full transcript length; negligible against the $2-5/screen budget. |
 | recruiter | `anthropic/claude-opus-4.8` | 5 / 25 | Ranking correctness and refusal compliance are trust-critical. ~$0.60 per shortlist on a 30-candidate longlist. |
 | verifier | `openai/gpt-5.4-nano` | 0.20 / 1.25 | Spec calls for a cheap small model; deterministic code does the real checks. |
