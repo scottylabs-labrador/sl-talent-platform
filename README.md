@@ -81,20 +81,31 @@ environment contract and `docs/DECISIONS.md` for the reasoning.
 
 ## Status
 
-Live on Railway in both environments, every surface and agent working for
-real (no demo-only stubs):
+Live on Railway in both environments as clean production software. There is
+no seeded demo content: the database holds only reference data (the skills
+taxonomy and operational config), and everything else is created for real
+through the product.
 
 - **Production**: https://web-production-6f576.up.railway.app
 - **Dev**: https://web-dev-1950.up.railway.app
 
-Sign in with Google (CMU `andrew.cmu.edu` for students) or the seeded demo
-accounts on the login page. Real integrations wired and verified end to end:
-per-agent OpenRouter routing (rep on Haiku 4.5, synthesis/recruiter on Opus
-4.8, concierge/coach on Sonnet 5), Cartesia STT+TTS on the live voice path,
-S3 stream-only audio, the recruiter matching pipeline behind the human gate,
-evidence verification, data export and account deletion workers, and the
-compliance controls above. The CallRoom runs the real Cartesia pipeline when
-a mic is present and a labelled simulation otherwise (`VOICE_SIMULATION`).
+Sign in with Google (CMU `andrew.cmu.edu` for students) once its client id
+is configured. Until then, the login page offers password-gated test access:
+one shared password (the `TEST_LOGIN_PASSWORD` env var) unlocks a real,
+provisioned account per role: an operator, a student routed through
+onboarding, and a sponsor attached to a real, empty organization. Test seats
+are real accounts, not demo content.
+
+Everything runs live and was verified from an empty database end to end:
+operators create student profiles (resume upload with live AI parse, or by
+hand); students onboard and take a real 30-minute voice screen (Cartesia
+streaming STT plus Sonic TTS through the browser mic); the Synthesizer builds
+an evidence-backed dossier; sponsors post roles through a real Concierge
+intake and receive a recruiter shortlist assembled from real candidates by
+content-embedding retrieval plus the live recruiter model, behind the ops
+human gate; every dashboard number, ledger row, and agent run is computed
+from live data. Per-agent OpenRouter routing: rep on Haiku 4.5,
+synthesis and recruiter on Opus 4.8, concierge and coach on Sonnet 5.
 
 ## Deploy
 
