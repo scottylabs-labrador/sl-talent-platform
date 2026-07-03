@@ -395,7 +395,9 @@ export const sponsorRouter = router({
       .slice()
       .sort((a, b) => statusRank(a.status) - statusRank(b.status))
       .map((j) => {
-        const shortlistId = shortlistByJob.get(j.id) ?? null;
+        // Sponsors can only open DELIVERED shortlists (human gate); a newer
+        // assembling/human_gate slate for the same job must never be linked.
+        const shortlistId = deliveredByJob.get(j.id)?.id ?? null;
         let slaTone: 'green' | 'amber' | 'gray' = 'gray';
         let slaLabel = 'SLA starts on confirm';
         let action: RoleRow['action'] = null;
@@ -1197,7 +1199,9 @@ export const sponsorRouter = router({
         {
           system: `${CONCIERGE_PROMPT}\n\n${digest}`,
           messages: [...history, { role: 'user', content: input.message }],
-          maxTokens: 500,
+          // Headroom for adaptive-thinking models: reasoning tokens must not
+          // starve the JSON body (a tight cap yields empty content).
+          maxTokens: 1500,
         },
         { schema: ConciergeReply, inputRef: 'concierge:sponsor' },
       );

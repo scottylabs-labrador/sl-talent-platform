@@ -492,9 +492,30 @@ export async function runAgent<S extends ZodTypeAny>(
 }
 
 function safeJsonParse(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) return undefined; // empty content → zod rejects → retry
   try {
-    return JSON.parse(text);
+    return JSON.parse(trimmed);
   } catch {
-    return undefined; // zod will reject; triggers the retry path
+    // Some models wrap JSON in ```json fences or add a preamble even under
+    // json_schema mode. Strip fences, then fall back to the outermost object.
+    const unfenced = trimmed
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim();
+    try {
+      return JSON.parse(unfenced);
+    } catch {
+      const first = unfenced.indexOf('{');
+      const last = unfenced.lastIndexOf('}');
+      if (first !== -1 && last > first) {
+        try {
+          return JSON.parse(unfenced.slice(first, last + 1));
+        } catch {
+          /* fall through */
+        }
+      }
+      return undefined;
+    }
   }
 }
