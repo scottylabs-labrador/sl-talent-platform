@@ -9,20 +9,8 @@ async function main(): Promise<void> {
   const r = await seed(db());
   // eslint-disable-next-line no-console
   console.log(
-    'Seed complete (idempotent — re-running does not duplicate). Table counts:\n' +
-      [
-        `  skills             ${r.skills}`,
-        `  config             ${r.config}`,
-        `  users              ${r.users}`,
-        `  students           ${r.students}`,
-        `  screens            ${r.screens}`,
-        `  screen_moments     ${r.screenMoments}`,
-        `  dossiers           ${r.dossiers}`,
-        `  shortlist_entries  ${r.shortlistEntries}`,
-        `  exceptions         ${r.exceptions}`,
-        `  ledger_events      ${r.ledgerEvents}`,
-        `  agent_runs         ${r.agentRuns}`,
-      ].join('\n'),
+    'Reference seed complete (idempotent). Row counts:\n' +
+      [`  skills   ${r.skills}`, `  config   ${r.config}`].join('\n'),
   );
 }
 

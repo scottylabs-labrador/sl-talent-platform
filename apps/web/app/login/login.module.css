@@ -51,6 +51,22 @@
   margin-top: 4px;
 }
 
+.passwordInput {
+  width: 100%;
+  height: 44px;
+  border-radius: 100px;
+  border: 1px solid #c7d2dc;
+  background: #fff;
+  padding: 0 18px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--ink-900);
+  outline: none;
+}
+.passwordInput:focus {
+  border-color: #0e96d1;
+}
+
 .microcopy {
   font-size: 12px;
   color: var(--ink-400);

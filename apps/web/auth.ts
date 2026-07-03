@@ -11,8 +11,10 @@ import type { UserRole, SponsorMemberRole } from '@tartan/types';
 import { authConfig, homeForRole, type AppTokenClaims } from './auth.config';
 import {
   isCmuEmail,
+  provisionTestUser,
   resolveOrProvisionCmuStudent,
   resolveUser,
+  type TestRole,
   type UserClaims,
 } from './lib/auth-user';
 
@@ -32,22 +34,32 @@ declare module 'next-auth' {
   }
 }
 
-// The three seeded demo identities (enabled only when DEV_LOGIN === 'true').
-const DEMO_EMAILS = new Set([
-  'student@demo.tartan',
-  'sponsor@demo.tartan',
-  'ops@demo.tartan',
-]);
-const DemoInput = z.object({ email: z.string().email() });
+// Password-gated test access. Enabled while Google sign-in is not yet
+// configured. One cheap shared password (TEST_LOGIN_PASSWORD) unlocks a real
+// account per role, provisioned on first use. Set TEST_LOGIN=false once Google
+// OAuth is live to turn this off.
+const TestInput = z.object({
+  role: z.enum(['student', 'sponsor', 'operator']),
+  password: z.string().min(1),
+});
 
-const devLoginEnabled = process.env.DEV_LOGIN === 'true';
+const testLoginEnabled =
+  process.env.TEST_LOGIN === 'true' || process.env.DEV_LOGIN === 'true';
+const TEST_PASSWORD = process.env.TEST_LOGIN_PASSWORD ?? 'scotty-talent-2026';
 
-function claimsToUser(claims: UserClaims, email: string) {
+function timingSafeEqualStr(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function claimsToUser(claims: UserClaims, label: string) {
   // The object returned from authorize becomes `user` in the jwt callback.
   return {
     id: claims.userId,
-    email,
-    name: email,
+    email: label,
+    name: label,
     userId: claims.userId,
     role: claims.role,
     studentId: claims.studentId,
@@ -60,20 +72,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
     ...authConfig.providers,
-    ...(devLoginEnabled
+    ...(testLoginEnabled
       ? [
           Credentials({
-            id: 'demo',
-            name: 'Demo accounts',
-            credentials: { email: { label: 'Email', type: 'email' } },
+            id: 'test',
+            name: 'Test access',
+            credentials: {
+              role: { label: 'Role', type: 'text' },
+              password: { label: 'Password', type: 'password' },
+            },
             async authorize(raw) {
-              const parsed = DemoInput.safeParse(raw);
+              const parsed = TestInput.safeParse(raw);
               if (!parsed.success) return null;
-              const email = parsed.data.email.toLowerCase();
-              if (!DEMO_EMAILS.has(email)) return null;
-              const claims = await resolveUser(email);
-              if (!claims) return null; // must be seeded
-              return claimsToUser(claims, email);
+              if (!timingSafeEqualStr(parsed.data.password, TEST_PASSWORD)) {
+                return null;
+              }
+              const role = parsed.data.role as TestRole;
+              const claims = await provisionTestUser(role);
+              return claimsToUser(claims, `${role}@test.scottylabs`);
             },
           }),
         ]
@@ -86,7 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // non-CMU accounts. Demo: already validated in authorize.
     async signIn({ account, profile, user }) {
       if (!account) return false;
-      if (account.provider === 'demo') return Boolean(user);
+      if (account.provider === 'test') return Boolean(user);
       if (account.provider === 'google') {
         const p = profile as
           | { email?: string; email_verified?: boolean; hd?: string }
@@ -107,7 +123,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, account, profile }) {
       const t = token as AppTokenClaims;
       if (account && user) {
-        if (account.provider === 'demo') {
+        if (account.provider === 'test') {
           const u = user as ReturnType<typeof claimsToUser>;
           t.userId = u.userId;
           t.role = u.role;

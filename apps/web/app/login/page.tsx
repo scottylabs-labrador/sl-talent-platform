@@ -1,6 +1,9 @@
-// Login. Continue with Google (ink primary) plus, when DEV_LOGIN is on, three
-// seeded demo accounts. Sign-in runs through server actions calling the
-// Auth.js signIn(); the root page then routes each principal to its home.
+// Login. Continue with Google (ink primary) plus, while Google sign-in is not
+// yet configured, password-gated test access for each role. Sign-in runs
+// through server actions calling Auth.js signIn(); the root page then routes
+// each principal to its home. Test accounts are real and provisioned on first
+// use (a real operator, a real student routed through onboarding, and a real
+// sponsor attached to a real, empty organization).
 
 import { redirect } from 'next/navigation';
 import { auth, signIn } from '@/auth';
@@ -41,15 +44,17 @@ export default async function LoginPage({
 
   const { callbackUrl } = await searchParams;
   const redirectTo = callbackUrl && callbackUrl.startsWith('/') ? callbackUrl : '/';
-  const devLogin = process.env.DEV_LOGIN === 'true';
+  const testLogin =
+    process.env.TEST_LOGIN === 'true' || process.env.DEV_LOGIN === 'true';
 
   async function googleSignIn() {
     'use server';
     await signIn('google', { redirectTo });
   }
-  async function demoSignIn(email: string) {
+  async function testSignIn(role: string, formData: FormData) {
     'use server';
-    await signIn('demo', { email, redirectTo });
+    const password = String(formData.get('password') ?? '');
+    await signIn('test', { role, password, redirectTo });
   }
 
   return (
@@ -71,35 +76,28 @@ export default async function LoginPage({
           CMU students sign in with an andrew.cmu.edu account.
         </p>
 
-        {devLogin && (
+        {testLogin && (
           <>
-            <div className={styles.divider}>Demo accounts</div>
-            <div className={styles.actions}>
-              <form
-                action={demoSignIn.bind(null, 'student@demo.tartan')}
-                className={styles.form}
-              >
-                <Pill type="submit" variant="secondary" block>
-                  Student demo
-                </Pill>
-              </form>
-              <form
-                action={demoSignIn.bind(null, 'sponsor@demo.tartan')}
-                className={styles.form}
-              >
-                <Pill type="submit" variant="secondary" block>
-                  Sponsor demo (Scogle)
-                </Pill>
-              </form>
-              <form
-                action={demoSignIn.bind(null, 'ops@demo.tartan')}
-                className={styles.form}
-              >
-                <Pill type="submit" variant="secondary" block>
-                  Ops demo
-                </Pill>
-              </form>
-            </div>
+            <div className={styles.divider}>Test access</div>
+            <form className={styles.actions}>
+              <input
+                name="password"
+                type="password"
+                required
+                autoComplete="off"
+                placeholder="Test password"
+                className={styles.passwordInput}
+              />
+              <Pill type="submit" variant="secondary" block formAction={testSignIn.bind(null, 'student')}>
+                Sign in as student
+              </Pill>
+              <Pill type="submit" variant="secondary" block formAction={testSignIn.bind(null, 'sponsor')}>
+                Sign in as sponsor
+              </Pill>
+              <Pill type="submit" variant="secondary" block formAction={testSignIn.bind(null, 'operator')}>
+                Sign in as operator
+              </Pill>
+            </form>
           </>
         )}
       </Card>

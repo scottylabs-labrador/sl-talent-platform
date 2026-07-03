@@ -3,7 +3,7 @@
 // access lives here so the edge auth config stays free of node-only deps.
 
 import { db, eq, or } from '@tartan/db';
-import { users, students, sponsorMembers } from '@tartan/db';
+import { users, students, sponsorMembers, sponsorOrgs } from '@tartan/db';
 import type { UserRole, SponsorMemberRole } from '@tartan/types';
 
 /** The enriched claims mirrored onto both the JWT and session.user. */
@@ -99,5 +99,87 @@ export async function resolveOrProvisionCmuStudent(
 
   const claims: UserClaims = { userId: userRow.id, role: userRow.role };
   if (studentRows[0]) claims.studentId = studentRows[0].id;
+  return claims;
+}
+
+// ── Test-access accounts ─────────────────────────────────────────────────────
+// Password-gated logins for exercising each role before Google sign-in is
+// configured. Each account is a REAL user, provisioned on first sign-in:
+//   operator - a bare operator account.
+//   student  - a real student with an empty profile (routed through onboarding).
+//   sponsor  - a real sponsor attached to a real, empty sponsor organization
+//              (created once) that the tester fills with real roles.
+// These are test seats, not demo content: nothing fake is populated behind them.
+
+export type TestRole = 'student' | 'sponsor' | 'operator';
+
+const TEST_EMAIL: Record<TestRole, string> = {
+  student: 'student@test.scottylabs',
+  sponsor: 'sponsor@test.scottylabs',
+  operator: 'operator@test.scottylabs',
+};
+const TEST_NAME: Record<TestRole, string> = {
+  student: 'Test Student',
+  sponsor: 'Test Sponsor',
+  operator: 'Test Operator',
+};
+
+const TEST_ORG_ID = '7e57c0de-0000-4000-8000-000000000001';
+const TEST_ORG_NAME = 'Test Sponsor Organization';
+
+async function ensureTestOrgId(): Promise<string> {
+  const existing = await db()
+    .select({ id: sponsorOrgs.id })
+    .from(sponsorOrgs)
+    .where(eq(sponsorOrgs.id, TEST_ORG_ID))
+    .limit(1);
+  if (existing[0]) return existing[0].id;
+  await db()
+    .insert(sponsorOrgs)
+    .values({
+      id: TEST_ORG_ID,
+      name: TEST_ORG_NAME,
+      domain: 'test.scottylabs',
+      tier: 'premier',
+    })
+    .onConflictDoNothing({ target: sponsorOrgs.id });
+  return TEST_ORG_ID;
+}
+
+/** Resolve or provision the real user behind a test-access role sign-in. */
+export async function provisionTestUser(role: TestRole): Promise<UserClaims> {
+  const email = TEST_EMAIL[role];
+  const existing = await resolveUser(email);
+  if (existing) return existing;
+
+  const inserted = await db()
+    .insert(users)
+    .values({
+      email,
+      name: TEST_NAME[role],
+      googleSub: `test-access:${role}`,
+      role,
+    })
+    .returning({ id: users.id, role: users.role });
+  const userRow = inserted[0];
+  if (!userRow) throw new Error('failed to provision test user');
+
+  const claims: UserClaims = { userId: userRow.id, role: userRow.role };
+
+  if (role === 'student') {
+    const s = await db()
+      .insert(students)
+      .values({ userId: userRow.id, andrewId: 'teststudent', kind: 'undergrad' })
+      .returning({ id: students.id });
+    if (s[0]) claims.studentId = s[0].id;
+  } else if (role === 'sponsor') {
+    const orgId = await ensureTestOrgId();
+    await db()
+      .insert(sponsorMembers)
+      .values({ userId: userRow.id, orgId, role: 'recruiter' })
+      .onConflictDoNothing();
+    claims.orgId = orgId;
+    claims.memberRole = 'recruiter';
+  }
   return claims;
 }
