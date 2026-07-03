@@ -33,6 +33,12 @@ export class ConnectionHandler {
   private closed = false;
   /** Set when this connection authenticated via the session resume token. */
   private resumeAuthenticated = false;
+  /** True once auth completes; until then inbound frames are buffered, not
+   *  processed. The browser sends `hello` the instant the socket opens, which
+   *  can beat the async token check (a Redis round-trip to a remote instance) —
+   *  without buffering that first frame is silently dropped. */
+  private authed = false;
+  private preAuthFrames: { data: Buffer; isBinary: boolean }[] = [];
 
   constructor(
     private readonly ws: WebSocket,
@@ -43,6 +49,25 @@ export class ConnectionHandler {
 
   async start(): Promise<void> {
     this.ws.binaryType = 'nodebuffer';
+
+    // Attach socket listeners SYNCHRONOUSLY, before the async auth below. The
+    // client can send `hello` the moment the socket opens, which may arrive
+    // while the token check is still awaiting Redis; such frames are buffered
+    // in preAuthFrames and drained in order once auth succeeds (or discarded if
+    // auth fails and the socket is closed).
+    this.ws.on('message', (data: Buffer, isBinary: boolean) => {
+      if (!this.authed) {
+        this.preAuthFrames.push({ data, isBinary });
+        return;
+      }
+      if (isBinary) this.onBinary(data);
+      else void this.onText(data);
+    });
+    this.ws.on('pong', () => {
+      this.isAlive = true;
+    });
+    this.ws.on('close', () => void this.onClose());
+    this.ws.on('error', (e) => log.error('ws error', e));
 
     // Authenticate before anything else. Two paths:
     //  • a fresh signed call token (single-use: replays within the TTL are
@@ -99,15 +124,15 @@ export class ConnectionHandler {
       this.studentId = v.payload.studentId;
     }
 
-    this.ws.on('message', (data: Buffer, isBinary: boolean) => {
-      if (isBinary) this.onBinary(data);
-      else void this.onText(data);
-    });
-    this.ws.on('pong', () => {
-      this.isAlive = true;
-    });
-    this.ws.on('close', () => void this.onClose());
-    this.ws.on('error', (e) => log.error('ws error', e));
+    // Auth passed: open the gate and drain anything that arrived early (the
+    // hello frame is almost always in here).
+    this.authed = true;
+    const buffered = this.preAuthFrames;
+    this.preAuthFrames = [];
+    for (const f of buffered) {
+      if (f.isBinary) this.onBinary(f.data);
+      else await this.onText(f.data);
+    }
   }
 
   // ── heartbeat control (called by the server loop) ──────────────────────────

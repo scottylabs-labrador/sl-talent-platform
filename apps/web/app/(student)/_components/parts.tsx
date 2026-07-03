@@ -4,9 +4,95 @@
 // from student-app.md / "Student App.dc.html".
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { Play, Pause } from 'lucide-react';
+import Link from 'next/link';
+import { Play, Pause, X } from 'lucide-react';
 import styles from '../student.module.css';
 import { clockLabel } from './format';
+
+// ── Tap-floor helpers (44px hit targets, spec-size visuals) ────────────────
+// The design keeps some controls visually small (overlay close 34px, secondary
+// pills 38–40px) while the accessibility floor is a 44px hit area. These two
+// helpers expand the tappable region to 44px without changing the visual: the
+// interactive element is 44px, a negative margin keeps the layout footprint at
+// the visual size, and the visible chrome lives on an inner element.
+
+/** Overlay close button: 44px hit target around the spec 34px circle. */
+export function CloseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Close"
+      style={{
+        width: 44,
+        height: 44,
+        margin: -5,
+        padding: 5,
+        background: 'transparent',
+        border: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        flex: 'none',
+      }}
+    >
+      <span
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: '50%',
+          border: '1px solid #c7d2dc',
+          background: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <X size={14} color="#4a5662" />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Full-width secondary pill link that keeps its spec visual height
+ * (`visualHeight`, e.g. 38 or 40) while exposing a 44px hit target. `className`
+ * styles the inner visual pill (e.g. styles.btnGhost); the outer anchor is the
+ * transparent hit surface. A negative vertical margin keeps the layout
+ * footprint at the visual height so nothing shifts.
+ */
+export function TapFloorLink({
+  href,
+  className,
+  visualHeight,
+  style,
+  children,
+}: {
+  href: string;
+  className?: string;
+  visualHeight: number;
+  style?: CSSProperties;
+  children: ReactNode;
+}) {
+  const vMargin = (visualHeight - 44) / 2;
+  return (
+    <Link
+      href={href}
+      style={{
+        display: 'flex',
+        width: '100%',
+        height: 44,
+        margin: `${vMargin}px 0`,
+        textDecoration: 'none',
+      }}
+    >
+      <span className={className} style={{ height: visualHeight, width: '100%', ...style }}>
+        {children}
+      </span>
+    </Link>
+  );
+}
 
 // ── Avatar (deep-blue initials tile) ───────────────────────────────────────
 export function Avatar({

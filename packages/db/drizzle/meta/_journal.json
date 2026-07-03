@@ -15,6 +15,13 @@
       "when": 1783009135697,
       "tag": "0001_guards",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783034109140,
+      "tag": "0002_slim_thundra",
+      "breakpoints": true
     }
   ]
 }

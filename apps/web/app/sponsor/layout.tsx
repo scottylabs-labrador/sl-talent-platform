@@ -6,6 +6,7 @@
 import { requireSession } from '@/auth';
 import { getServerApi } from '@/lib/trpc/server';
 import { SponsorChrome } from './_components/SponsorChrome';
+import { ConciergeProvider } from './_components/ConciergeSheet';
 
 export default async function SponsorLayout({
   children,
@@ -16,8 +17,10 @@ export default async function SponsorLayout({
   const api = await getServerApi();
   const { org, nav } = await api.sponsor.chrome();
   return (
-    <SponsorChrome org={org} nav={nav}>
-      {children}
-    </SponsorChrome>
+    <ConciergeProvider>
+      <SponsorChrome org={org} nav={nav}>
+        {children}
+      </SponsorChrome>
+    </ConciergeProvider>
   );
 }

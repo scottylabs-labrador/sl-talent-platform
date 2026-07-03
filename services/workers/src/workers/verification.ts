@@ -123,12 +123,23 @@ async function verifyOne(ev: EvidenceRow): Promise<void> {
   }
 
   // Provenance: verified only on a positive deterministic result; otherwise
-  // pending. A failed (conflicting) result also files an ops exception.
-  const provenance = det.result === 'verified' ? 'verified' : 'pending';
-  await db()
-    .update(evidence)
-    .set({ provenance })
-    .where(eq(evidence.id, ev.id));
+  // pending. A failed (conflicting) result also files an ops exception. When it
+  // stays pending (rate limit, private repo, no deterministic check applied), we
+  // record WHY in evidence.meta.verificationNote so the reason survives a retry
+  // and is visible to ops — a graceful 403/rate-limit leaves an auditable note
+  // rather than silently looking unverified.
+  const verified = det.result === 'verified';
+  const provenance = verified ? 'verified' : 'pending';
+  const patch: { provenance: 'verified' | 'pending'; meta?: EvidenceMeta } = {
+    provenance,
+  };
+  if (!verified) {
+    patch.meta = {
+      ...(ev.meta ?? {}),
+      verificationNote: `${det.method}: ${det.detail}`,
+    } as EvidenceMeta;
+  }
+  await db().update(evidence).set(patch).where(eq(evidence.id, ev.id));
 
   await appendLedger([
     {

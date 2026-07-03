@@ -16,8 +16,28 @@ type RecState = 'idle' | 'rec' | 'sent';
 export function MatchesScreen() {
   const { data, isLoading } = trpc.student.matches.useQuery();
   const { toast } = useToast();
+  const utils = trpc.useUtils();
   const uploadUrl = trpc.student.replyUploadUrl.useMutation();
   const reply = trpc.student.replyToMatch.useMutation();
+  const respondReveal = trpc.student.respondReveal.useMutation();
+
+  const respond = (entryId: string, grant: boolean, company: string) => {
+    respondReveal.mutate(
+      { entryId, grant },
+      {
+        onSuccess: () => {
+          void utils.student.matches.invalidate();
+          void utils.student.ledger.invalidate();
+        },
+      },
+    );
+    toast(
+      grant
+        ? `Reveal sent. ${company} now sees your name and profile.`
+        : `Kept hidden. ${company} only sees your shortlist card.`,
+      { durationMs: 2600 },
+    );
+  };
 
   const [recState, setRecState] = useState<RecState>('idle');
   const [recT, setRecT] = useState(0);
@@ -120,6 +140,34 @@ export function MatchesScreen() {
             </div>
           </div>
 
+          {/* Match-only identity reveal */}
+          {match.revealConsent === 'requested' && (
+            <div style={{ background: '#fff', border: '1.5px solid #90cfea', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 2px 8px rgba(14,150,209,.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em', color: '#0a6b94' }}>Identity reveal requested</div>
+                <div style={{ fontSize: 10.5, color: '#869db3' }}>match only</div>
+              </div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: '#1e1e1e' }}>
+                {match.company} asked to see who you are. Reveal your name and profile to move forward, or keep hidden and stay anonymous. Either way your shortlist stays open.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" disabled={respondReveal.isPending} onClick={() => respond(match.entryId, true, match.company)} className={styles.btnAccent} style={{ flex: 1, height: 44, fontSize: 13, fontWeight: 600 }}>Reveal my profile</button>
+                <button type="button" disabled={respondReveal.isPending} onClick={() => respond(match.entryId, false, match.company)} className={styles.btnGhost} style={{ flex: 1, height: 44, fontSize: 13, fontWeight: 600 }}>Keep hidden</button>
+              </div>
+            </div>
+          )}
+          {match.revealConsent === 'granted' && (
+            <div style={{ background: '#dcefe0', borderRadius: 10, padding: '11px 13px', display: 'flex', gap: 9, alignItems: 'center' }}>
+              <Check size={15} strokeWidth={2.4} color="#0d4b17" style={{ flex: 'none' }} />
+              <div style={{ fontSize: 12.5, fontWeight: 500, color: '#0d4b17' }}>Your name and profile are revealed to {match.company}.</div>
+            </div>
+          )}
+          {match.revealConsent === 'declined' && (
+            <div style={{ border: '1px solid #e9ebf8', borderRadius: 10, padding: '11px 13px', fontSize: 12.5, color: '#5f6f7f' }}>
+              You kept your profile hidden for this match. {match.company} only sees your shortlist card.
+            </div>
+          )}
+
           {/* Async question card */}
           {match.asyncQuestion && (
             <div style={{ background: '#fff', border: '1.5px solid #90cfea', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 10, boxShadow: '0 2px 8px rgba(14,150,209,.1)' }}>
@@ -139,7 +187,10 @@ export function MatchesScreen() {
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#d72444', flex: 'none' }} />
                   <RecBars />
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#fff' }}>{recT.toFixed(1)}s</span>
-                  <button type="button" onClick={() => doneRec(match.entryId)} className={styles.btnAccent} style={{ height: 34, padding: '0 16px', fontSize: 12.5, fontWeight: 600 }}>Done</button>
+                  {/* 44px hit target around the spec 34px pill (margin keeps the pill's layout footprint). */}
+                  <button type="button" onClick={() => doneRec(match.entryId)} style={{ height: 44, margin: '-5px 0', padding: 0, background: 'transparent', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', flex: 'none' }}>
+                    <span className={styles.btnAccent} style={{ height: 34, padding: '0 16px', fontSize: 12.5, fontWeight: 600 }}>Done</span>
+                  </button>
                 </div>
               )}
               {recState === 'sent' && (

@@ -559,6 +559,20 @@ export const AudioClip = z.object({
 });
 export type AudioClip = z.infer<typeof AudioClip>;
 
+// The recruiter's async follow-up question and, once answered, the student's
+// reply. Audio streams via /api/stream/answer/:entryId (never a durable URL);
+// text is the typed alternative. Shown in the Summary tab under the suggested
+// questions.
+export const AsyncFollowUp = z.object({
+  question: z.string(),
+  answered: z.boolean(),
+  answeredAt: z.string().nullable(),
+  text: z.string().nullable(),
+  // present only when the student recorded an audio answer.
+  audio: z.object({ streamPath: z.string(), tag: z.string() }).nullable(),
+});
+export type AsyncFollowUp = z.infer<typeof AsyncFollowUp>;
+
 export const DossierViewOutput = z.object({
   entryId: z.string().uuid(),
   student: Identity,
@@ -568,6 +582,8 @@ export const DossierViewOutput = z.object({
   competency: DossierCompetencies,
   flags: DossierFlags,
   followups: Followups,
+  // the recruiter's async follow-up + the student's answer (null if none posed).
+  followUp: AsyncFollowUp.nullable(),
   stories: z.array(ExperienceStory),
   clips: z.array(AudioClip),
   // synced transcript for the currently-selected clip (word timestamps).
@@ -611,6 +627,10 @@ export const ConciergeMessageInput = z.object({
   // optional context scoping (a job/shortlist the sponsor is looking at).
   jobId: z.string().uuid().optional(),
   shortlistId: z.string().uuid().optional(),
+  // prior turns of this session's chat (client-held), so replies stay coherent.
+  history: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() }))
+    .optional(),
 });
 export type ConciergeMessageInput = z.infer<typeof ConciergeMessageInput>;
 

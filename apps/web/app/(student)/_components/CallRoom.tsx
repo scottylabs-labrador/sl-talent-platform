@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
 import { useToast } from '@/components/ui';
 import { TartanBand } from '@/components/ui';
 import styles from '../student.module.css';
 import { useVoiceSession } from '@/lib/voice/useVoiceSession';
-import { VoiceBars, ProgressArc, VisibilitySwitch, AudioMomentRow, CompetencyRow } from './parts';
+import { VoiceBars, ProgressArc, VisibilitySwitch, AudioMomentRow, CompetencyRow, CloseButton } from './parts';
 import { clockLabel } from './format';
 
 type Phase = 'pre' | 'live' | 'post';
@@ -127,9 +127,7 @@ function Consent({ consentA, consentB, setA, setB, onStart, onClose, onTextMode,
     <div className={styles.overlay} style={{ background: '#fff', position: 'relative', minHeight: '100dvh' }}>
       <div style={{ padding: '64px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 21, letterSpacing: '-0.02em' }}>Before we start</div>
-        <button type="button" onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid #c7d2dc', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-          <X size={14} color="#4a5662" />
-        </button>
+        <CloseButton onClick={onClose} />
       </div>
       <div style={{ flex: 1, overflow: 'auto', padding: '4px 20px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ border: '1px solid #e9ebf8', borderRadius: 12, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -155,7 +153,7 @@ function Consent({ consentA, consentB, setA, setB, onStart, onClose, onTextMode,
         <button type="button" disabled={!both || pending} onClick={onStart} className={both ? styles.btnDark : styles.btnDisabled} style={{ height: 48, fontSize: 15, fontWeight: 600, marginTop: 2 }}>
           {pending ? 'Starting…' : 'Start the call'}
         </button>
-        <button type="button" onClick={onTextMode} className={styles.linkBtn} style={{ height: 40, color: '#5f6f7f', fontSize: 12.5, fontWeight: 500 }}>Prefer text? Take the written version instead</button>
+        <button type="button" onClick={onTextMode} className={styles.linkBtn} style={{ height: 44, color: '#5f6f7f', fontSize: 12.5, fontWeight: 500 }}>Prefer text? Take the written version instead</button>
       </div>
     </div>
   );
@@ -267,9 +265,7 @@ function PostReview({ screenId, onClose, onApproved, onStrike }: {
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 21, letterSpacing: '-0.02em' }}>Two things arrived</div>
           <div style={{ fontSize: 12, color: '#5f6f7f' }}>Call ended at 29:12 · transcript saved</div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close" style={{ width: 34, height: 34, borderRadius: '50%', border: '1px solid #c7d2dc', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-          <X size={14} color="#4a5662" />
-        </button>
+        <CloseButton onClick={onClose} />
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '8px 20px 40px', display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -314,7 +310,7 @@ function PostReview({ screenId, onClose, onApproved, onStrike }: {
                 />
               ))}
               {shown[0] && (
-                <button type="button" onClick={() => strike(shown[0]!.id)} className={styles.linkBtn} style={{ fontSize: 12, color: '#5f6f7f', textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: 3 }}>
+                <button type="button" onClick={() => strike(shown[0]!.id)} className={styles.linkBtn} style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', alignSelf: 'flex-start', fontSize: 12, color: '#5f6f7f', textAlign: 'left', textDecoration: 'underline', textUnderlineOffset: 3 }}>
                   Strike a moment entirely
                 </button>
               )}

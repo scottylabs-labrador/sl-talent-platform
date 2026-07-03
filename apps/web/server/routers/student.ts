@@ -808,6 +808,19 @@ export const studentRouter = router({
         .where(and(eq(shortlistEntries.id, input.entryId), eq(shortlistEntries.studentId, studentId)))
         .limit(1);
       if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your match' });
+      // Persist the answer onto the entry so it surfaces in the sponsor dossier
+      // (audio streams via /api/stream/answer/:entryId; never a durable URL).
+      await ctx.db
+        .update(shortlistEntries)
+        .set({
+          asyncAnswer: {
+            question: ASYNC_QUESTION_TEXT,
+            audioKey: input.audioKey ?? null,
+            text: input.text ?? null,
+            answeredAt: new Date().toISOString(),
+          },
+        })
+        .where(eq(shortlistEntries.id, input.entryId));
       await writeLedgerEvent({
         studentId,
         actorKind: 'student',
@@ -820,6 +833,64 @@ export const studentRouter = router({
         },
       });
       return { entryId: input.entryId, delivered: true };
+    }),
+
+  // Match-only reveal, student side. When a sponsor requests identity reveal on
+  // a match-only entry (reveal_consent='requested'), the student grants or
+  // declines here. Grant flips the entry to 'granted' (the visibility layer then
+  // lets the sponsor read the identity); decline flips it to 'declined'. Either
+  // way the choice is appended to the student's ledger. Ownership-scoped, and it
+  // only ever acts on an entry that actually has a pending request.
+  respondReveal: studentProcedure
+    .input(z.object({ entryId: z.string().uuid(), grant: z.boolean() }))
+    .output(
+      z.object({
+        entryId: z.string().uuid(),
+        revealConsent: z.enum(['granted', 'declined']),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select({
+          id: shortlistEntries.id,
+          revealConsent: shortlistEntries.revealConsent,
+        })
+        .from(shortlistEntries)
+        .where(
+          and(
+            eq(shortlistEntries.id, input.entryId),
+            eq(shortlistEntries.studentId, studentId),
+          ),
+        )
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your match' });
+      if (owned[0].revealConsent !== 'requested') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'no reveal request is pending on this match',
+        });
+      }
+      const next = input.grant ? ('granted' as const) : ('declined' as const);
+      await db
+        .update(shortlistEntries)
+        .set({ revealConsent: next })
+        .where(eq(shortlistEntries.id, input.entryId));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'reveal_consent',
+          note: input.grant
+            ? 'You revealed your identity to the sponsor for this match.'
+            : 'You kept your identity hidden for this match.',
+        },
+      });
+      return { entryId: input.entryId, revealConsent: next };
     }),
 
   exportData: studentProcedure.output(ExportOutput).mutation(async ({ ctx }) => {

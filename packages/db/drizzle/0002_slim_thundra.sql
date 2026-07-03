@@ -1,0 +1,1 @@
+ALTER TABLE "shortlist_entries" ADD COLUMN "async_answer" jsonb;

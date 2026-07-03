@@ -5,7 +5,7 @@ import { Check, Plus } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
 import { TartanBand } from '@/components/ui';
 import styles from '../student.module.css';
-import { Avatar, StepTimeline } from './parts';
+import { Avatar, StepTimeline, TapFloorLink } from './parts';
 import { initials, ledgerChip, ledgerWhen } from './format';
 
 const ROOT: React.CSSProperties = {
@@ -65,7 +65,16 @@ export function HomeScreen() {
                 {primaryAction.primary.label}
               </Link>
               {primaryAction.secondary && (
-                <button type="button" className={styles.btnGhost} style={{ height: 44, padding: '0 18px', fontSize: 14, fontWeight: 600 }}>
+                // Scheduled booking is a later phase; keep the affordance but
+                // disable it so it does not read as a live control.
+                <button
+                  type="button"
+                  disabled
+                  aria-label={`${primaryAction.secondary.label} (opens in a later phase)`}
+                  title="Scheduled slots open in a later phase"
+                  className={styles.btnGhost}
+                  style={{ height: 44, padding: '0 18px', fontSize: 14, fontWeight: 600, opacity: 0.55, cursor: 'not-allowed' }}
+                >
                   {primaryAction.secondary.label}
                 </button>
               )}
@@ -103,9 +112,9 @@ export function HomeScreen() {
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5f6f7f' }}>
             {liveMatch.stepLabels.map((l) => <span key={l}>{l}</span>)}
           </div>
-          <Link href="/matches" className={styles.btnGhost} style={{ height: 40, fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+          <TapFloorLink href="/matches" className={styles.btnGhost} visualHeight={40} style={{ fontSize: 13, fontWeight: 600 }}>
             Answer Scogle&rsquo;s follow-up question
-          </Link>
+          </TapFloorLink>
         </div>
       )}
 

@@ -156,6 +156,19 @@ export type EvidenceChip = z.infer<typeof EvidenceChip>;
 export const EvidenceChips = z.array(EvidenceChip);
 export type EvidenceChips = z.infer<typeof EvidenceChips>;
 
+// shortlist_entries.async_answer -----------------------------------------
+// The student's answer to the recruiter's async follow-up question. Audio is
+// stored by key (streamed via /api/stream/answer/:entryId, never a durable
+// URL); text is the typed alternative. answeredAt is an ISO timestamp; question
+// is the prompt the student answered (denormalized so the card is self-describing).
+export const AsyncAnswer = z.object({
+  question: z.string().optional(),
+  audioKey: z.string().nullable().optional(),
+  text: z.string().nullable().optional(),
+  answeredAt: z.string(),
+});
+export type AsyncAnswer = z.infer<typeof AsyncAnswer>;
+
 // ledger_events.detail ---------------------------------------------------
 // Discriminated by the event kind so each row carries exactly the context
 // that kind needs. The `kind` here mirrors ledger_events.kind (denormalized

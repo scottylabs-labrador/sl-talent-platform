@@ -1,17 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
-import { Eye } from 'lucide-react';
+import { Eye, Plus } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
-import { TartanBand } from '@/components/ui';
+import { TartanBand, useToast } from '@/components/ui';
 import styles from '../student.module.css';
 import { StudentShell } from './StudentShell';
-import { Avatar } from './parts';
+import { Avatar, TapFloorLink } from './parts';
 import { SponsorPanel } from './SponsorPanel';
 import { evidenceState, evidenceCaption, clockLabel } from './format';
+import type { EvidenceType } from '@tartan/types';
 
 const ROOT: React.CSSProperties = { padding: '64px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 };
+
+// The subset of evidence types a student can self-attach (interview_moment is
+// minted by the Rep during a screen, never added by hand).
+const EVIDENCE_TYPES: { value: EvidenceType; label: string }[] = [
+  { value: 'repo', label: 'Repo' },
+  { value: 'paper', label: 'Paper' },
+  { value: 'demo', label: 'Demo' },
+  { value: 'hackathon', label: 'Hackathon' },
+  { value: 'course', label: 'Course' },
+  { value: 'work', label: 'Work' },
+];
+
+const FIELD_LABEL: React.CSSProperties = { fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', color: '#869db3' };
+const FIELD_INPUT: React.CSSProperties = { width: '100%', height: 44, padding: '0 12px', borderRadius: 8, border: '1px solid #c7d2dc', background: '#fff', fontSize: 12.5, color: '#1e1e1e', fontFamily: 'var(--font-ui)' };
 
 const EDGE: Record<string, { edge: string; capFg: string; dashed: boolean; fg: string; op: number }> = {
   verified: { edge: '#0e96d1', capFg: '#0a6b94', dashed: false, fg: '#1e1e1e', op: 1 },
@@ -32,11 +46,28 @@ function outcomePrompt(title: string): string {
 }
 
 export function ProfileScreen() {
-  const { data, isLoading } = trpc.student.profile.useQuery();
+  const { data, isLoading } = trpc.student.profile.useQuery(undefined, {
+    // While any evidence is pending verification, gently poll so the provenance
+    // flip (pending -> verified) surfaces without a manual refresh. Idle once
+    // nothing is pending.
+    refetchInterval: (q) =>
+      q.state.data?.evidence?.some((e) => e.provenance === 'pending') ? 20_000 : false,
+  });
+  const utils = trpc.useUtils();
+  const { toast } = useToast();
+  const addEvidence = trpc.student.addEvidence.useMutation();
+
   const [viewSponsor, setViewSponsor] = useState(false);
   // undefined = untouched (defaults to the first skill, like the prototype's
   // initial expandedSkill); null = explicitly deselected (empty state shows).
   const [expandedSkill, setExpandedSkill] = useState<string | null | undefined>(undefined);
+
+  // Add-evidence form state.
+  const [addOpen, setAddOpen] = useState(false);
+  const [evType, setEvType] = useState<EvidenceType>('repo');
+  const [evTitle, setEvTitle] = useState('');
+  const [evUrl, setEvUrl] = useState('');
+  const [evSkill, setEvSkill] = useState(''); // skill slug or '' (no wiring yet)
 
   const screenId = data?.screenDossierCard?.screenId;
   const review = trpc.student.screenReview.useQuery(
@@ -57,6 +88,34 @@ export function ProfileScreen() {
   const selected =
     expandedSkill === undefined ? (talentGraph[0]?.skillId ?? null) : expandedSkill;
   const activeSkill = talentGraph.find((s) => s.skillId === selected) ?? null;
+
+  const submitEvidence = () => {
+    const title = evTitle.trim();
+    if (!title || addEvidence.isPending) return;
+    const wiredSkillId = evSkill ? talentGraph.find((s) => s.slug === evSkill)?.skillId : undefined;
+    addEvidence.mutate(
+      {
+        type: evType,
+        title,
+        url: evUrl.trim() || undefined,
+        skillSlugs: evSkill ? [evSkill] : undefined,
+      },
+      {
+        onSuccess: () => {
+          void utils.student.profile.invalidate();
+          void utils.student.ledger.invalidate();
+          toast('Added. Verification is queued.', { durationMs: 2600 });
+          // Reveal the new pending item under the skill it was wired to.
+          if (wiredSkillId) setExpandedSkill(wiredSkillId);
+          setEvTitle('');
+          setEvUrl('');
+          setEvSkill('');
+          setAddOpen(false);
+        },
+        onError: () => toast('Could not add that. Please try again.', { durationMs: 2600 }),
+      },
+    );
+  };
 
   const [degree, school] = (identity.program ?? '').split(', ');
   const metaPhone = [school, degree, monthYearOf(identity.gradDate)].filter(Boolean).join(' · ');
@@ -156,6 +215,63 @@ export function ProfileScreen() {
         </div>
       </div>
 
+      {/* Add evidence — dashed, pending-provenance affordance under the graph */}
+      <div style={{ border: '1px dashed #aebdcc', borderRadius: 12, background: '#f8fafc', overflow: 'hidden' }}>
+        {!addOpen ? (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            style={{ width: '100%', minHeight: 44, display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+          >
+            <span style={{ width: 24, height: 24, borderRadius: '50%', background: '#e7f5fa', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+              <Plus size={15} strokeWidth={2} color="#0a6b94" />
+            </span>
+            <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#1e1e1e' }}>Add evidence</span>
+              <span style={{ fontSize: 11, lineHeight: 1.4, color: '#869db3' }}>Attach proof to wire a skill. We verify it, then it goes solid.</span>
+            </span>
+          </button>
+        ) : (
+          <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#1e1e1e' }}>Add evidence</div>
+              <button type="button" onClick={() => setAddOpen(false)} className={styles.linkBtn} style={{ minHeight: 44, display: 'inline-flex', alignItems: 'center', fontSize: 12, color: '#5f6f7f' }}>Cancel</button>
+            </div>
+
+            <label style={FIELD_LABEL} htmlFor="ev-type">Type</label>
+            <select id="ev-type" value={evType} onChange={(e) => setEvType(e.target.value as EvidenceType)} style={FIELD_INPUT}>
+              {EVIDENCE_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+
+            <label style={FIELD_LABEL} htmlFor="ev-title">Title</label>
+            <input id="ev-title" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} placeholder="e.g. railtrace repo, 14 commits" style={FIELD_INPUT} />
+
+            <label style={FIELD_LABEL} htmlFor="ev-url">Link (optional)</label>
+            <input id="ev-url" value={evUrl} onChange={(e) => setEvUrl(e.target.value)} placeholder="https://" inputMode="url" style={FIELD_INPUT} />
+
+            <label style={FIELD_LABEL} htmlFor="ev-skill">Wire to a skill (optional)</label>
+            <select id="ev-skill" value={evSkill} onChange={(e) => setEvSkill(e.target.value)} style={FIELD_INPUT}>
+              <option value="">No skill yet</option>
+              {talentGraph.map((s) => (
+                <option key={s.skillId} value={s.slug}>{s.name}</option>
+              ))}
+            </select>
+
+            <button
+              type="button"
+              disabled={!evTitle.trim() || addEvidence.isPending}
+              onClick={submitEvidence}
+              className={evTitle.trim() && !addEvidence.isPending ? styles.btnDark : styles.btnDisabled}
+              style={{ height: 44, fontSize: 13.5, fontWeight: 600, marginTop: 2 }}
+            >
+              {addEvidence.isPending ? 'Adding…' : 'Add evidence'}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Experience stories */}
       <div style={{ fontSize: 13, fontWeight: 600, padding: '0 2px' }}>Experience stories</div>
       {stories.map((story) => (
@@ -187,9 +303,9 @@ export function ProfileScreen() {
                 : 'Complete your Talent Rep screen and approve the draft. Nothing sponsor-visible ships without your sign-off.'}
             </div>
             {screenDossierCard.action && (
-              <Link href={screenDossierCard.action.href ?? '#'} className={styles.btnGhost} style={{ height: 40, fontSize: 13, fontWeight: 600, marginTop: 2 }}>
+              <TapFloorLink href={screenDossierCard.action.href ?? '#'} className={styles.btnGhost} visualHeight={40} style={{ fontSize: 13, fontWeight: 600 }}>
                 {screenDossierCard.action.label}
-              </Link>
+              </TapFloorLink>
             )}
           </div>
         </div>

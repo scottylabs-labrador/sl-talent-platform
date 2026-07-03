@@ -10,8 +10,9 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { JobStatus, RoleRow } from '@tartan/types';
 import { trpc } from '@/lib/trpc/client';
-import { MonoText, useToast } from '@/components/ui';
+import { MonoText } from '@/components/ui';
 import { BrandGlyph } from '@/components/ui';
+import { useConcierge } from './_components/ConciergeSheet';
 import styles from './_components/dashboard.module.css';
 
 // Design copy the RoleRow type cannot carry (unique per seeded status).
@@ -49,7 +50,7 @@ function metaFor(status: JobStatus): { meta: string; statusLine: string } {
 
 export default function SponsorDashboard() {
   const router = useRouter();
-  const { toast } = useToast();
+  const concierge = useConcierge();
   const dashboard = trpc.sponsor.dashboard.useQuery();
   const createJob = trpc.sponsor.createJob.useMutation();
 
@@ -58,11 +59,8 @@ export default function SponsorDashboard() {
     router.push(`/sponsor/intake/${res.jobId}`);
   };
 
-  const conciergeChip = () =>
-    toast(
-      'Concierge is on it. Reads are instant; anything that commits the platform gets drafted for operator approval.',
-      { durationMs: 3000 },
-    );
+  // The suggestion chips open the Concierge sheet prefilled with the question.
+  const conciergeChip = (prompt: string) => concierge.open(prompt);
 
   if (!dashboard.data) {
     return <div className={styles.wrap} aria-busy="true" />;
@@ -148,7 +146,11 @@ export default function SponsorDashboard() {
         </div>
         <div className={styles.chipsRow}>
           {d.conciergeSuggestions.map((c, i) => (
-            <button key={i} className={styles.conciergeChip} onClick={conciergeChip}>
+            <button
+              key={i}
+              className={styles.conciergeChip}
+              onClick={() => conciergeChip(c)}
+            >
               {c}
             </button>
           ))}

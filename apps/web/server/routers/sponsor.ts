@@ -28,6 +28,7 @@ import {
   ShortlistOutput,
 } from '@tartan/types';
 import type {
+  AsyncFollowUp,
   Calibration,
   CandidateCard,
   CompRange,
@@ -37,6 +38,7 @@ import type {
   RequirementRow,
   RoleRow,
   ShortlistFunnel,
+  StatTile,
 } from '@tartan/types';
 import {
   runAgent,
@@ -53,6 +55,7 @@ import {
   eq,
   exceptions,
   experienceStories as experienceStoriesTable,
+  inArray,
   jobs,
   outcomes,
   rawSql,
@@ -74,6 +77,12 @@ const LICENSE = 'Premier: internal recruiting use only';
 const REFUSED_ROW_VALUE =
   'Filters that proxy protected classes are declined at intake, by policy';
 const SLA_HOURS = 72;
+// The demo narrative's one async follow-up (mirrors student.ts). Shown on the
+// SWE Intern shortlist so the Summary tab's Follow-up block has a question even
+// before the student answers. There is no async_questions table; the answer,
+// once given, is persisted on shortlist_entries.async_answer.
+const ASYNC_QUESTION_TEXT =
+  'RailTrace buffered bursty writes for one rail line. What breaks first if Scogle pointed 40,000 fleet units at it, and what would you change?';
 const SCOPE_NOTE =
   'This prototype builds the complete dossier for June Park, rank 1. Open hers for the full Summary, Evidence, Screen and Logistics experience; every candidate gets the same structure in production.';
 
@@ -190,6 +199,72 @@ function statusRank(status: string): number {
   }
 }
 
+/**
+ * A compact, licensed-scope digest the Concierge is grounded on: the org's
+ * roles + statuses, the candidates on delivered shortlists (name/rank/fit/chips,
+ * anonymized where reveal is not granted), and the funnel numbers. It NEVER
+ * includes hidden/struck moments, coaching reports, or paused/unpublished
+ * students — those never leave the visibility view. Passed as system context so
+ * replies stay inside the license.
+ */
+async function buildConciergeDigest(orgId: string): Promise<string> {
+  const db = getDb();
+  const jobRows = await db
+    .select({ id: jobs.id, title: jobs.title, status: jobs.status })
+    .from(jobs)
+    .where(eq(jobs.orgId, orgId));
+
+  const lines: string[] = [];
+  lines.push(
+    'LICENSED SCOPE (answer only from what is below; never name a candidate not listed here, never mention hidden moments, coaching notes, grades, retakes, or paused students):',
+  );
+  lines.push('');
+  lines.push('Roles this sponsor owns:');
+  if (jobRows.length === 0) lines.push('- none yet');
+  for (const j of jobRows) lines.push(`- ${j.title} (status: ${j.status})`);
+
+  const deliveredRows = await db
+    .select({ shortlistId: shortlists.id, jobTitle: jobs.title })
+    .from(shortlists)
+    .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
+    .where(and(eq(jobs.orgId, orgId), eq(shortlists.status, 'delivered')));
+
+  const funnelBlob = await readConfig<{ funnel?: ShortlistFunnel }>(
+    'sponsor.scogle_dashboard',
+  );
+
+  for (const sl of deliveredRows) {
+    const entries = await db
+      .select()
+      .from(shortlistEntries)
+      .where(eq(shortlistEntries.shortlistId, sl.shortlistId))
+      .orderBy(shortlistEntries.rank);
+    const visible = await visibleStudents(entries.map((e) => e.studentId));
+    lines.push('');
+    lines.push(`Delivered shortlist for ${sl.jobTitle}:`);
+    for (const e of entries) {
+      const v = visible.get(e.studentId);
+      const anon = (e.kind === 'match_only' && e.revealConsent !== 'granted') || !v;
+      const name = anon
+        ? 'Match-only candidate (identity withheld pending consent)'
+        : v!.name;
+      const chips = (e.evidenceChips ?? []).map((c) => c.label).join(', ');
+      const parts = [`rank ${e.rank}: ${name}`, `fit ${e.fit}`];
+      if (e.kind !== 'fit') parts.push(e.kind);
+      if (e.status !== 'none') parts.push(`status ${e.status}`);
+      lines.push(`- ${parts.join(', ')}${chips ? ` — ${chips}` : ''}`);
+    }
+    const answered = entries.filter((e) => e.asyncAnswer != null).length;
+    const f = funnelBlob?.funnel;
+    lines.push(
+      `Funnel: ${f?.screened ?? 62} screened, ${f?.deepEvaluated ?? 27} deep-evaluated, ${
+        answered > 0 ? answered : (f?.answeredFollowup ?? 9)
+      } answered the recruiter follow-up.`,
+    );
+  }
+  return lines.join('\n');
+}
+
 // ── router ───────────────────────────────────────────────────────────────────
 
 export const sponsorRouter = router({
@@ -250,15 +325,72 @@ export const sponsorRouter = router({
       .from(jobs)
       .where(eq(jobs.orgId, orgId));
 
-    // Delivered jobs → their shortlist id for the "Review shortlist" link.
+    // Delivered jobs → their shortlist id for the "Review shortlist" link, plus
+    // status + delivery time so the SLA chip can be a real countdown.
     const shortlistRows = await getDb()
-      .select({ id: shortlists.id, jobId: shortlists.jobId })
+      .select({
+        id: shortlists.id,
+        jobId: shortlists.jobId,
+        status: shortlists.status,
+        updatedAt: shortlists.updatedAt,
+      })
       .from(shortlists)
       .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
       .where(eq(jobs.orgId, orgId));
     const shortlistByJob = new Map(shortlistRows.map((s) => [s.jobId, s.id]));
+    const deliveredByJob = new Map(
+      shortlistRows
+        .filter((s) => s.status === 'delivered')
+        .map((s) => [s.jobId, s]),
+    );
 
     const now = Date.now();
+
+    // ── Live stats (each tile falls back to the seeded blob only with no data) ──
+    const deliveredShortlistIds = shortlistRows
+      .filter((s) => s.status === 'delivered')
+      .map((s) => s.id);
+
+    let introCount = 0;
+    let screenedCount = 0;
+    if (deliveredShortlistIds.length) {
+      const entryRows = await getDb()
+        .select({
+          studentId: shortlistEntries.studentId,
+          status: shortlistEntries.status,
+        })
+        .from(shortlistEntries)
+        .where(inArray(shortlistEntries.shortlistId, deliveredShortlistIds));
+      introCount = entryRows.filter((e) => e.status === 'intro').length;
+      const studentIds = [...new Set(entryRows.map((e) => e.studentId))];
+      if (studentIds.length) {
+        const pubScreens = await getDb()
+          .select({ id: screens.id })
+          .from(screens)
+          .where(
+            and(
+              inArray(screens.studentId, studentIds),
+              eq(screens.status, 'published'),
+            ),
+          );
+        screenedCount = pubScreens.length;
+      }
+    }
+
+    // Time to first shortlist: confirmedAt → delivery of the earliest delivered
+    // role, in hours (SLA is 72h). Falls back to the seeded value if unknown.
+    let ttfsLabel: string | null = null;
+    for (const j of jobRows) {
+      const sl = deliveredByJob.get(j.id);
+      if (sl && j.confirmedAt) {
+        const hrs = Math.max(
+          1,
+          Math.round((sl.updatedAt.getTime() - j.confirmedAt.getTime()) / 3_600_000),
+        );
+        ttfsLabel = `${hrs}h`;
+        break;
+      }
+    }
     const roles: RoleRow[] = jobRows
       .slice()
       .sort((a, b) => statusRank(a.status) - statusRank(b.status))
@@ -269,7 +401,18 @@ export const sponsorRouter = router({
         let action: RoleRow['action'] = null;
         if (j.status === 'delivered') {
           slaTone = 'green';
-          slaLabel = 'Delivered in 41h';
+          const sl = deliveredByJob.get(j.id);
+          const deliveredHrs =
+            sl && j.confirmedAt
+              ? Math.max(
+                  1,
+                  Math.round(
+                    (sl.updatedAt.getTime() - j.confirmedAt.getTime()) /
+                      3_600_000,
+                  ),
+                )
+              : null;
+          slaLabel = deliveredHrs ? `Delivered in ${deliveredHrs}h` : 'Delivered in 41h';
           action = shortlistId
             ? { label: 'Review shortlist', href: `/sponsor/shortlist/${shortlistId}` }
             : null;
@@ -296,19 +439,33 @@ export const sponsorRouter = router({
         };
       });
 
-    // Pre-formatted stat tiles + concierge chips come from the seeded demo blob
-    // (exact design strings). Falls back to design defaults if absent.
+    // Concierge chips + the seeded stat blob (used only as a per-tile fallback
+    // for numbers with no live data source). Labels stay design-verbatim.
     const blob = await readConfig<{
       stats?: { n: string; label: string }[];
       conciergeChips?: string[];
     }>('sponsor.scogle_dashboard');
+    const seededStat = (i: number): string | null => blob?.stats?.[i]?.n ?? null;
 
-    const stats = (blob?.stats ?? [
-      { n: '62', label: 'candidates screened for your roles' },
-      { n: '41h', label: 'time to first shortlist, SLA 72h' },
-      { n: '4 / 10', label: 'intros accepted on role 1 so far' },
-      { n: '3 / 10', label: 'role slots used this year' },
-    ]).map((s) => ({ label: s.label, value: s.n }));
+    const stats: StatTile[] = [
+      {
+        label: 'candidates screened for your roles',
+        value: screenedCount > 0 ? String(screenedCount) : (seededStat(0) ?? '62'),
+      },
+      {
+        label: 'time to first shortlist, SLA 72h',
+        value: ttfsLabel ?? (seededStat(1) ?? '41h'),
+      },
+      {
+        label: 'intros accepted on role 1 so far',
+        value:
+          introCount > 0 ? `${introCount} / 10` : (seededStat(2) ?? '4 / 10'),
+      },
+      {
+        label: 'role slots used this year',
+        value: `${jobRows.length} / ${org.roleSlots}`,
+      },
+    ];
 
     const conciergeSuggestions = blob?.conciergeChips ?? [
       'How many ML systems students graduate in May?',
@@ -654,10 +811,22 @@ export const sponsorRouter = router({
       const funnelBlob = await readConfig<{
         funnel?: ShortlistFunnel;
       }>('sponsor.scogle_dashboard');
-      const funnel: ShortlistFunnel = funnelBlob?.funnel ?? {
+      const seededFunnel = funnelBlob?.funnel ?? {
         screened: 62,
         deepEvaluated: 27,
         answeredFollowup: 9,
+      };
+      // 'answered your follow-up' is real: entries the student has answered
+      // (async_answer set). Fall back to the seeded pool note only when zero.
+      const answeredFollowupCount = entries.filter(
+        (e) => e.asyncAnswer != null,
+      ).length;
+      const funnel: ShortlistFunnel = {
+        ...seededFunnel,
+        answeredFollowup:
+          answeredFollowupCount > 0
+            ? answeredFollowupCount
+            : seededFunnel.answeredFollowup,
       };
 
       const shortfallNote =
@@ -868,6 +1037,27 @@ export const sponsorRouter = router({
         ssoVerified: true,
       };
 
+      // Async follow-up: the recruiter's question + the student's answer, if
+      // any. The question shows even before an answer (Awaiting reply); once
+      // answered, the audio streams via /api/stream/answer/:entryId (never a
+      // durable URL) or the typed text renders inline.
+      const answer = entry.asyncAnswer ?? null;
+      const hasFollowUp = answer !== null || job.title.startsWith('SWE Intern');
+      const followUp: AsyncFollowUp | null = hasFollowUp
+        ? {
+            question: answer?.question ?? ASYNC_QUESTION_TEXT,
+            answered: answer !== null,
+            answeredAt: answer?.answeredAt ?? null,
+            text: answer?.text ?? null,
+            audio: answer?.audioKey
+              ? {
+                  streamPath: `/api/stream/answer/${entry.id}`,
+                  tag: 'Recorded answer to your follow-up',
+                }
+              : null,
+          }
+        : null;
+
       // Full player experience only where audio clips exist (June, rank 1);
       // others render the scope note (production supplies full for all).
       const hasFull = clips.length > 0;
@@ -891,6 +1081,7 @@ export const sponsorRouter = router({
         competency: dossierRow?.competency ?? [],
         flags: dossierRow?.flags ?? { green: [], probe: [] },
         followups: dossierRow?.followups ?? [],
+        followUp,
         stories: stories.map((s) => ({
           id: s.id,
           title: s.title,
@@ -958,6 +1149,7 @@ export const sponsorRouter = router({
         .update(jobs)
         .set({ calibration: { ...cal, notes } })
         .where(eq(jobs.id, row.job.id));
+      // File the ops exception the operator approves to trigger the rerun.
       await getDb()
         .insert(exceptions)
         .values({
@@ -965,27 +1157,50 @@ export const sponsorRouter = router({
           agent: 'recruiter',
           context: {
             agent: 'Recruiter',
-            quote: `Sponsor recalibration: ${input.note}`,
+            title: 'Sponsor recalibration: rerun requested',
+            quote: input.note,
             category: 'low_confidence_shortlist',
             refs: { jobId: row.job.id, shortlistId: input.shortlistId },
           },
           recommendation:
-            'Rerun the shortlist with the sponsor recalibration, within the same SLA.',
+            'Re-run the shortlist with the sponsor calibration applied.',
           status: 'open',
         });
+      // Trust rule: the sponsor's calibration edit lands in the ledger.
+      await writeLedgerEvent({
+        actorKind: 'sponsor',
+        actorId: ctx.principal.orgId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'calibration',
+          note: `Sponsor recalibration requested: ${input.note}`,
+        },
+        license: LICENSE,
+      });
       return { ok: true as const };
     }),
 
-  // POST /concierge/messages
+  // POST /concierge/messages — grounded on the licensed-scope digest so replies
+  // stay inside the sponsor's roles + delivered shortlists (never hidden data).
   conciergeMessage: sponsorProcedure
     .input(ConciergeMessageInput)
     .output(ConciergeMessageOutput)
-    .mutation(async ({ input }) => {
-      const result = await runAgent('concierge', {
-        system: CONCIERGE_PROMPT,
-        messages: [{ role: 'user', content: input.message }],
-        maxTokens: 500,
-      }, { schema: ConciergeReply, inputRef: 'concierge:sponsor' });
+    .mutation(async ({ ctx, input }) => {
+      const digest = await buildConciergeDigest(ctx.principal.orgId);
+      const history = (input.history ?? []).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const result = await runAgent(
+        'concierge',
+        {
+          system: `${CONCIERGE_PROMPT}\n\n${digest}`,
+          messages: [...history, { role: 'user', content: input.message }],
+          maxTokens: 500,
+        },
+        { schema: ConciergeReply, inputRef: 'concierge:sponsor' },
+      );
       const r = result.output;
       return { reply: r.reply, suggestions: r.suggestions, refs: r.refs };
     }),

@@ -30,6 +30,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import type {
   AgentRunOutput,
+  AsyncAnswer,
   Calibration,
   CompExpectation,
   CompRange,
@@ -404,6 +405,9 @@ export const shortlistEntries = pgTable(
     kind: entryKindEnum('kind').notNull().default('fit'),
     status: entryStatusEnum('status').notNull().default('none'),
     passReason: text('pass_reason'),
+    // The student's answer to the recruiter's async follow-up (audio key +/or
+    // text + answeredAt). Nullable: only set once the student replies.
+    asyncAnswer: jsonb('async_answer').$type<AsyncAnswer>(),
     revealConsent: revealConsentEnum('reveal_consent')
       .notNull()
       .default('n/a'),

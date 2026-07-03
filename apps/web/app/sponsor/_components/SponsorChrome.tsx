@@ -21,6 +21,7 @@ import {
 import type { ReactNode } from 'react';
 import { BrandGlyph, useToast } from '@/components/ui';
 import { MonoText } from '@/components/ui';
+import { useConcierge } from './ConciergeSheet';
 import styles from './SponsorChrome.module.css';
 
 interface ChromeOrg {
@@ -51,12 +52,9 @@ export function SponsorChrome({
   const pathname = usePathname();
   const router = useRouter();
   const { toast } = useToast();
+  const concierge = useConcierge();
 
-  const pingConcierge = () =>
-    toast(
-      'Concierge: I can answer pool questions, rerun shortlists, or take a new role. Try me from any screen.',
-      { durationMs: 3000 },
-    );
+  const pingConcierge = () => concierge.open();
 
   const p2 = (label: string) =>
     toast(`${label} ships in phase 2. The Concierge can answer most of it today.`, {

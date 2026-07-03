@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { trpc } from '@/lib/trpc/client';
 import styles from '../student.module.css';
+import { TapFloorLink } from './parts';
 
 const ROOT: React.CSSProperties = { padding: '64px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 };
 
@@ -29,7 +30,7 @@ export function InterviewsScreen() {
               <span style={{ fontSize: 10.5, fontWeight: 600, color: '#0d4b17', background: '#dcefe0', borderRadius: 4, padding: '3px 8px' }}>Completed · Jul 1</span>
             </div>
             <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4a5662' }}>Dossier live with 3 audio moments. Coaching report below is private to you, always.</div>
-            <Link href={startHref} className={styles.btnGhost} style={{ height: 38, fontSize: 12.5, fontWeight: 600 }}>Retake (1 left this semester, invisible to sponsors)</Link>
+            <TapFloorLink href={startHref} className={styles.btnGhost} visualHeight={38} style={{ fontSize: 12.5, fontWeight: 600 }}>Retake (1 left this semester, invisible to sponsors)</TapFloorLink>
           </>
         ) : (
           <>
@@ -47,7 +48,7 @@ export function InterviewsScreen() {
           <span style={{ fontSize: 10.5, fontWeight: 600, color: '#4b2d8f', background: '#d1c4ee', borderRadius: 4, padding: '3px 8px' }}>Private to you</span>
         </div>
         <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4a5662' }}>Two strengths, two growth areas, two practice suggestions from the Coach. The Coach is on your side; the Recruiter is neutral.</div>
-        <Link href={reviewHref} className={styles.btnGhost} style={{ height: 38, fontSize: 12.5, fontWeight: 600 }}>Open report + dossier review</Link>
+        <TapFloorLink href={reviewHref} className={styles.btnGhost} visualHeight={38} style={{ fontSize: 12.5, fontWeight: 600 }}>Open report + dossier review</TapFloorLink>
       </div>
 
       {/* Semester refresher */}

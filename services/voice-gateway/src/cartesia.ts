@@ -94,11 +94,13 @@ export class CartesiaSttClient {
     else this.queue.push(pcm);
   }
 
-  /** Tell Cartesia to flush a final for the current utterance. */
+  /** Tell Cartesia to flush a final for the current utterance. The ink-whisper
+   *  WS protocol expects the bare command string `finalize` (NOT a JSON frame);
+   *  it replies with a final transcript then a `flush_done`. */
   finalize(): void {
     if (this.ws && this.open) {
       try {
-        this.ws.send(JSON.stringify({ type: 'finalize' }));
+        this.ws.send('finalize');
       } catch {
         /* ignore */
       }
