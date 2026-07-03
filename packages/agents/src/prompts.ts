@@ -113,6 +113,44 @@ export const SENTINEL_PROMPT = `You are the Sentinel. Once a week you summarize 
 
 Output strict JSON: a one-line headline, a short list of highlights (what moved this week, with numbers), costAlerts (any agent trending toward its monthly budget cap, with agent, a one-line note, and pctOfBudget; alert at 80 percent), an adverseImpactNote (a plain-language read of the weekly rollup, or null if nothing stands out), and confidence. Never speculate beyond the data. Never include any candidate's protected-class attributes. Flag, do not decide; humans hold the gate.`;
 
+// ── Resume parse: jump-start onboarding from an uploaded resume ──────────────
+// Runs on the Synthesizer model (claude-opus-4.8) with its own versioned prompt
+// so the run is auditable as a resume parse, not a dossier synthesis. It never
+// invents: a resume is a claim, so everything it extracts stays self-reported
+// and unverified downstream. Versioned independently of the agent prompts and
+// passed to runAgent via opts.promptVersion.
+export const RESUME_PARSE_PROMPT_VERSION = 'v0.1';
+
+// The seeded skill taxonomy slugs, so the model can map an obvious skill onto a
+// canonical slug. When nothing matches cleanly it leaves slug undefined and the
+// authoring layer slugifies the raw name on save.
+const SKILL_TAXONOMY_SLUGS = [
+  'computer-systems', 'systems-programming-c', 'distributed-systems',
+  'database-systems', 'operating-systems', 'compilers', 'computer-networks',
+  'cloud-computing', 'go', 'rust', 'c', 'cpp', 'kubernetes', 'docker',
+  'machine-learning', 'intro-ml-phd', 'deep-learning-systems',
+  'deep-reinforcement-learning', 'natural-language-processing',
+  'computer-vision', 'convex-optimization', 'pytorch', 'jax',
+  'software-engineering', 'human-computer-interaction',
+  'web-application-development', 'product-management', 'typescript', 'react',
+  'api-design', 'algorithms', 'theoretical-cs', 'computer-security',
+  'applied-cryptography',
+].join(', ');
+
+export const RESUME_PARSE_PROMPT = `You extract a structured profile draft from a Carnegie Mellon student's or alum's resume text. This draft jump-starts an onboarding wizard; the person edits everything afterward, so a miss is cheap but a fabrication is not. Extract ONLY what the resume actually states. Never invent a skill, a project, an outcome, a date, or a logistics fact that is not on the page.
+
+Output strict JSON matching the provided schema, with four parts:
+
+logistics: program (degree and field, e.g. "B.S. Computer Science"), gradDateISO (the expected or actual graduation date as an ISO date like "2027-05-01"; use the first of the stated month when only a month and year are given), kind (undergrad, grad, or alum, inferred from the degree and dates), workAuth (only if the resume states work authorization or citizenship; map to status one of citizen, permanent_resident, f1_opt, f1_cpt, h1b_needed, other, and set needsSponsorship accordingly), locations (any locations the person says they are open to or based in), compExpectation (only if the resume states a target pay; set hourly true for an hourly rate), startupOpen (true only if the resume explicitly signals startup interest). Omit any logistics field the resume does not state.
+
+skills: each skill the resume names or clearly demonstrates. name is the human label (e.g. "Distributed systems", "Go"). slug: set it only when the skill maps obviously onto one of these canonical taxonomy slugs, else leave it undefined: ${SKILL_TAXONOMY_SLUGS}. proficiency is an optional 1 to 5 self-estimate only if the resume gives a strong signal (a TA role, an internship shipping it, a deep project); otherwise omit it and let the person set it. evidenceHint is a short pointer to where in the resume the skill shows up.
+
+stories: real described work only, one per substantial project or role, as situation / contribution / outcome. situation is the context, contribution is what THIS person did (prefer "I" claims the resume supports), outcome is the stated result. If the resume states no outcome for a piece of work, omit outcome; never invent one. Keep each field to a sentence or two, grounded in the resume's own words.
+
+evidence: concrete artifacts the resume points at. type is one of repo, paper, demo, hackathon, course, work. title is the artifact name (a repo name, a course code, an employer). Map course numbers with a hyphen exactly as CMU writes them (15-440, 15-445, 10-601). url only if the resume prints one. note is a one-line description from the resume.
+
+Rules: sentence case, no em dashes. Be concise. Prefer omitting a field over guessing. Everything you emit will be shown to the person as self-reported and unverified, so accuracy to the page matters more than completeness.`;
+
 export const AGENT_PROMPTS: Record<AgentName, string> = {
   rep: REP_PROMPT,
   synthesizer: SYNTHESIZER_PROMPT,

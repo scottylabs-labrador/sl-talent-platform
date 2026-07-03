@@ -121,6 +121,15 @@ export class InterviewSession {
         this.session.pausedAtEpoch = null;
         await saveSession(this.session);
       }
+      // Restart recording on rejoin. stop() aborts the in-flight multipart and
+      // clears session.recording; without this, a session that already passed
+      // both consent gates would never record again after a rejoin and the
+      // final end_call would produce a null audioKey. The pre-drop span's raw
+      // audio is lost (documented limitation); post-rejoin audio is captured
+      // into a fresh object at the same key.
+      if (consentSatisfied(this.session)) {
+        await this.maybeStartRecording();
+      }
     }
 
     // Announce the current section + elapsed immediately so a resumed client
@@ -479,7 +488,12 @@ export class InterviewSession {
             speakNext();
           },
         },
-        { continue: idx > 1 },
+        // Each sentence chunk opens its own one-shot Cartesia socket, so
+        // context-continuation (which only spans a single connection) does not
+        // apply. Sending `continue: true` on a standalone socket makes Cartesia
+        // hold the context open and never emit `done`, stalling the turn after
+        // the first sentence. Always finalize per socket.
+        { continue: false },
       );
     };
     speakNext();

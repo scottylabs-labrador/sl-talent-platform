@@ -13,7 +13,7 @@ import {
   CoachingReportBody,
   JobRequirements,
 } from './json.js';
-import { EntryKind } from './enums.js';
+import { EntryKind, EvidenceType, StudentKind, WorkAuthStatus } from './enums.js';
 
 // ── Synthesizer: dossier draft ────────────────────────────────────────────
 // Evidence-backed from the transcript. Every competency must reference a
@@ -127,6 +127,96 @@ export const ConciergeReply = z.object({
   confidence: z.number().min(0).max(1),
 });
 export type ConciergeReply = z.infer<typeof ConciergeReply>;
+
+// ── Synthesizer (resume role): resume parse jump-start ─────────────────────
+// Structured extraction from an uploaded resume's plain text, used to seed the
+// onboarding wizard. Extract ONLY what the resume states; never invent. Every
+// field is optional-tolerant so a sparse resume still parses. The student edits
+// everything afterward, so a miss is cheap and a fabrication is not.
+
+// Two hard constraints shape every optional field below.
+//
+// 1) Under the provider's strict JSON-schema mode the wire schema renders every
+//    optional leaf as NULLABLE (type: [T, "null"]), so the model legitimately
+//    returns `null` for anything the resume does not state. We therefore use
+//    `.nullish()` (accepts null AND undefined) on every optional; a plain
+//    `.optional()` would reject the model's null and fail validation.
+// 2) The Anthropic structured-output compiler caps union-typed parameters at
+//    16. So nested blocks (comp, work auth) keep their inner fields REQUIRED —
+//    the block is present-in-full or omitted — rather than reusing the shared
+//    CompExpectation/WorkAuth whose many optional leaves blow the cap.
+//
+// The lean comp/work-auth blocks are structural subsets of the shared
+// CompExpectation/WorkAuth; the onboarding/create-student layer composes the
+// full shapes (adding currency 'USD', etc.) when it lands a draft.
+
+export const ResumeCompExpectation = z.object({
+  min: z.number().nonnegative(),
+  max: z.number().nonnegative(),
+  hourly: z.boolean(),
+});
+export type ResumeCompExpectation = z.infer<typeof ResumeCompExpectation>;
+
+export const ResumeWorkAuth = z.object({
+  status: WorkAuthStatus,
+  needsSponsorship: z.boolean(),
+});
+export type ResumeWorkAuth = z.infer<typeof ResumeWorkAuth>;
+
+// A logistics fact block the resume may state (program, grad date, work auth,
+// locations, comp, startup interest). Every field optional-tolerant.
+export const ResumeLogistics = z.object({
+  program: z.string().nullish(),
+  gradDateISO: z.string().nullish(), // ISO date, e.g. "2027-05-01"
+  kind: StudentKind.nullish(), // undergrad | grad | alum
+  workAuth: ResumeWorkAuth.nullish(),
+  locations: z.array(z.string()).nullish(),
+  compExpectation: ResumeCompExpectation.nullish(),
+  startupOpen: z.boolean().nullish(),
+});
+export type ResumeLogistics = z.infer<typeof ResumeLogistics>;
+
+// A skill the resume names. slug is filled only when it maps obviously onto the
+// seeded taxonomy; else left null (authoring code slugifies on save).
+export const ResumeSkill = z.object({
+  name: z.string(),
+  slug: z.string().nullish(),
+  proficiency: z.number().int().min(1).max(5).nullish(),
+  evidenceHint: z.string().nullish(), // where in the resume it was demonstrated
+});
+export type ResumeSkill = z.infer<typeof ResumeSkill>;
+
+// A situation / contribution / outcome story pulled from real described work.
+export const ResumeStory = z.object({
+  title: z.string(),
+  situation: z.string(),
+  contribution: z.string(),
+  outcome: z.string().nullish(),
+});
+export type ResumeStory = z.infer<typeof ResumeStory>;
+
+// An evidence artifact the resume points at (a repo, a paper, a course, work).
+export const ResumeEvidence = z.object({
+  type: EvidenceType,
+  title: z.string(),
+  url: z.string().nullish(),
+  note: z.string().nullish(),
+});
+export type ResumeEvidence = z.infer<typeof ResumeEvidence>;
+
+// The four blocks are required (never .default()/.optional()): under the
+// provider's strict JSON mode a `.default()` becomes an anyOf union and every
+// optional becomes nullable, and the Anthropic structured-output compiler caps
+// union-typed parameters at 16. Required blocks the model always emits (empty
+// arrays / an all-null logistics object for a sparse resume), which keeps the
+// schema lean while staying fully optional-tolerant at the leaves.
+export const ResumeParseResult = z.object({
+  logistics: ResumeLogistics,
+  skills: z.array(ResumeSkill),
+  stories: z.array(ResumeStory),
+  evidence: z.array(ResumeEvidence),
+});
+export type ResumeParseResult = z.infer<typeof ResumeParseResult>;
 
 // ── Sentinel: weekly digest ───────────────────────────────────────────────
 

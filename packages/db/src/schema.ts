@@ -154,6 +154,12 @@ export const students = pgTable(
     compExpectation: jsonb('comp_expectation').$type<CompExpectation>(),
     lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }),
     freshnessScore: doublePrecision('freshness_score'),
+    // Onboarding gate: null = onboarding incomplete (the self-serve wizard or
+    // an ops-created profile has not been finished). Set once the student (or
+    // ops) completes the flow; drives the /onboarding redirect.
+    onboardedAt: timestamp('onboarded_at', { withTimezone: true }),
+    // The last uploaded resume's extracted text, stashed for audit + re-parse.
+    resumeText: text('resume_text'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -4,39 +4,60 @@
 // the operational rollup blobs in `config` (ops.week_stats, ops.agent_workforce)
 // that the design prototype renders verbatim.
 
+import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import {
   AgentsOutput,
+  CreateStudentInput,
+  CreateStudentOutput,
   ExceptionsOutput,
+  OpsStudentRow,
   ResolveExceptionInput,
   ResolveExceptionOutput,
   SamplerOutput,
+  ScreenStatus,
   UpdateConfigInput,
   UpdateConfigOutput,
   agentNameValues,
 } from '@tartan/types';
 import type {
   AgentName,
+  EvidenceMeta,
   ExceptionCategory,
   ExceptionContext,
+  ScreenStatus as ScreenStatusType,
 } from '@tartan/types';
 import {
   agentRuns,
   and,
   asc,
   config,
+  desc,
   eq,
+  evidence,
   exceptions,
+  experienceStories,
   gte,
   isNotNull,
   jobs,
+  screens,
   shortlists,
+  skillClaims,
+  skills,
   sql,
+  students,
+  users,
 } from '@tartan/db';
 import { TRPCError } from '@trpc/server';
+import { embedOne, parseResume } from '@tartan/agents';
 import { router, opsProcedure } from '../trpc';
 import { writeLedgerEvent } from '@/lib/ledger';
-import { enqueueLedgerFanout, enqueueMatching } from '@/lib/redis';
+import {
+  enqueueLedgerFanout,
+  enqueueMatching,
+  enqueueVerification,
+} from '@/lib/redis';
+import { slugify } from '@/lib/resume';
 
 // ── category → label + tone (exact design mapping) ──────────────────────────
 const CATEGORY_LABEL: Record<ExceptionCategory, string> = {
@@ -130,7 +151,270 @@ const SidebarOutput = z.object({
   workforce: z.array(WorkforceRow),
 });
 
+// ── ops students roster ──────────────────────────────────────────────────
+// The roster reuses the foundation's OpsStudentRow contract and adds the two
+// derived display columns the ops list renders (live skill-claim count and the
+// student's latest screen status). Extending here — rather than in
+// @tartan/types — keeps the shared read contract lean while giving the roster
+// exactly the columns the brief calls for.
+const OpsStudentRosterRow = OpsStudentRow.extend({
+  skillCount: z.number().int().nonnegative(),
+  screenStatus: ScreenStatus.nullable(),
+});
+const OpsStudentsRosterOutput = z.object({
+  students: z.array(OpsStudentRosterRow),
+});
+
+// Self-reported proficiency the resume parser did not pin. A middle-of-scale
+// claim (never verified) is landed until the student edits it in authoring.
+const DEFAULT_SELF_PROFICIENCY = 3;
+
 export const opsRouter = router({
+  // GET /ops/students — the roster for the ops student-creation tool. One row
+  // per student (newest first) with the identity + logistics scalars plus two
+  // derived columns: the live skill-claim count and the latest screen status.
+  opsStudents: opsProcedure
+    .output(OpsStudentsRosterOutput)
+    .query(async ({ ctx }) => {
+      const rows = await ctx.db
+        .select({
+          studentId: students.id,
+          userId: users.id,
+          name: users.name,
+          email: users.email,
+          andrewId: students.andrewId,
+          kind: students.kind,
+          program: students.program,
+          gradDate: students.gradDate,
+          visibility: students.visibility,
+          onboardedAt: students.onboardedAt,
+          createdAt: students.createdAt,
+          skillCount: sql<number>`(select count(*) from ${skillClaims} where ${skillClaims.studentId} = ${students.id})::int`,
+          screenStatus: sql<
+            string | null
+          >`(select ${screens.status} from ${screens} where ${screens.studentId} = ${students.id} order by ${screens.createdAt} desc limit 1)`,
+        })
+        .from(students)
+        .innerJoin(users, eq(students.userId, users.id))
+        .orderBy(desc(students.createdAt));
+
+      return {
+        students: rows.map((r) => ({
+          studentId: r.studentId,
+          userId: r.userId,
+          name: r.name,
+          email: r.email,
+          andrewId: r.andrewId,
+          kind: r.kind,
+          program: r.program,
+          gradDateISO: r.gradDate ? r.gradDate.toISOString() : null,
+          visibility: r.visibility,
+          onboarded: r.onboardedAt != null,
+          onboardedAt: r.onboardedAt ? r.onboardedAt.toISOString() : null,
+          createdAt: r.createdAt.toISOString(),
+          skillCount: r.skillCount ?? 0,
+          screenStatus: (r.screenStatus as ScreenStatusType | null) ?? null,
+        })),
+      };
+    }),
+
+  // POST /ops/students — mint a student profile from scratch. Creates the user
+  // (role student, a synthetic google_sub since these are ops-minted) + the
+  // student row (onboarded_at stamped now — ops-created profiles are considered
+  // onboarded). An optional resumeText is parsed and lands the same
+  // skills/stories/evidence shape a student would author: claims verified=false,
+  // evidence provenance pending. Every creation writes one ledger edit row; any
+  // evidence carrying a URL is enqueued for verification.
+  createStudent: opsProcedure
+    .input(CreateStudentInput)
+    .output(CreateStudentOutput)
+    .mutation(async ({ ctx, input }) => {
+      // Parse + embed BEFORE opening the write transaction so no network I/O is
+      // held across the DB transaction. A resume is a claim, not proof: every
+      // row this seeds is self-reported / pending until the verifier runs.
+      const draft = input.resumeText
+        ? await parseResume(input.resumeText)
+        : null;
+
+      // Best-effort embeddings for the seeded stories/evidence (semantic search
+      // + matching). A failed embed never blocks profile creation.
+      async function safeEmbed(text: string): Promise<number[] | null> {
+        const trimmed = text.trim();
+        if (!trimmed) return null;
+        try {
+          return await embedOne(trimmed);
+        } catch {
+          return null;
+        }
+      }
+
+      const storySeeds = draft
+        ? await Promise.all(
+            draft.stories.map(async (s) => ({
+              title: s.title,
+              situation: s.situation,
+              contribution: s.contribution,
+              outcome: s.outcome ?? null,
+              embedding: await safeEmbed(
+                [s.title, s.situation, s.contribution, s.outcome ?? '']
+                  .filter(Boolean)
+                  .join('\n'),
+              ),
+            })),
+          )
+        : [];
+
+      const evidenceSeeds = draft
+        ? await Promise.all(
+            draft.evidence.map(async (e) => ({
+              type: e.type,
+              title: e.title,
+              url: e.url ?? null,
+              meta: (e.note
+                ? { description: e.note }
+                : undefined) as EvidenceMeta | undefined,
+              embedding: await safeEmbed(
+                [e.title, e.note ?? ''].filter(Boolean).join('\n'),
+              ),
+            })),
+          )
+        : [];
+
+      const { studentId, userId, verifyEvidenceIds } =
+        await ctx.db.transaction(async (tx) => {
+          const [user] = await tx
+            .insert(users)
+            .values({
+              googleSub: `ops-created:${randomUUID()}`,
+              email: input.email,
+              name: input.name,
+              role: 'student',
+            })
+            .returning({ id: users.id });
+          if (!user) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'user insert returned no row',
+            });
+          }
+
+          const [student] = await tx
+            .insert(students)
+            .values({
+              userId: user.id,
+              andrewId: input.andrewId ?? null,
+              program: input.program ?? null,
+              gradDate: input.gradDateISO ? new Date(input.gradDateISO) : null,
+              kind: input.kind,
+              // omit → column default 'searchable' when the operator left it.
+              ...(input.visibility ? { visibility: input.visibility } : {}),
+              workAuth: input.workAuth ?? null,
+              locations: input.locations ?? null,
+              compExpectation: input.compExpectation ?? null,
+              // ops-created profiles are considered onboarded.
+              onboardedAt: new Date(),
+              resumeText: input.resumeText ?? null,
+            })
+            .returning({ id: students.id });
+          if (!student) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'student insert returned no row',
+            });
+          }
+
+          // ── skills → find-or-create the taxonomy row, then land a claim ──
+          for (const s of draft?.skills ?? []) {
+            const slug = s.slug?.trim() || slugify(s.name);
+            if (!slug) continue;
+            let [skill] = await tx
+              .select({ id: skills.id })
+              .from(skills)
+              .where(eq(skills.slug, slug))
+              .limit(1);
+            if (!skill) {
+              [skill] = await tx
+                .insert(skills)
+                .values({ slug, name: s.name })
+                .onConflictDoNothing({ target: skills.slug })
+                .returning({ id: skills.id });
+              if (!skill) {
+                // Lost the insert race: the row now exists, read it back.
+                [skill] = await tx
+                  .select({ id: skills.id })
+                  .from(skills)
+                  .where(eq(skills.slug, slug))
+                  .limit(1);
+              }
+            }
+            if (!skill) continue;
+            await tx.insert(skillClaims).values({
+              studentId: student.id,
+              skillId: skill.id,
+              proficiency: s.proficiency ?? DEFAULT_SELF_PROFICIENCY,
+              verified: false,
+            });
+          }
+
+          // ── experience stories (self-reported) ──────────────────────────
+          for (const st of storySeeds) {
+            await tx.insert(experienceStories).values({
+              studentId: student.id,
+              title: st.title,
+              situation: st.situation,
+              contribution: st.contribution,
+              outcome: st.outcome,
+              embedding: st.embedding,
+            });
+          }
+
+          // ── evidence (provenance pending; verified only by the worker) ──
+          const verifyIds: string[] = [];
+          for (const ev of evidenceSeeds) {
+            const [row] = await tx
+              .insert(evidence)
+              .values({
+                studentId: student.id,
+                type: ev.type,
+                provenance: 'pending',
+                title: ev.title,
+                url: ev.url,
+                meta: ev.meta,
+                embedding: ev.embedding,
+              })
+              .returning({ id: evidence.id });
+            if (row && ev.url) verifyIds.push(row.id);
+          }
+
+          return {
+            studentId: student.id,
+            userId: user.id,
+            verifyEvidenceIds: verifyIds,
+          };
+        });
+
+      // ── ledger: ops creation is a consequential mutation ────────────────
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'system',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: { kind: 'edit', field: 'ops.create_student' },
+      });
+
+      // Enqueue verification for any evidence with a URL (best-effort; the
+      // verification worker also runs a periodic sweep).
+      for (const evidenceId of verifyEvidenceIds) {
+        try {
+          await enqueueVerification({ evidenceId, studentId });
+        } catch {
+          // dev has Redis; never fail the creation on an enqueue hiccup.
+        }
+      }
+
+      return { studentId, userId };
+    }),
+
   // GET /ops/exceptions — the queue (open cards + resolved rows), fixed order.
   exceptions: opsProcedure.output(ExceptionsOutput).query(async ({ ctx }) => {
     const rows = await ctx.db

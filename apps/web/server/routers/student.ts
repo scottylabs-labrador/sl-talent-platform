@@ -35,7 +35,7 @@ import {
   students,
   users,
 } from '@tartan/db';
-import { embedOne } from '@tartan/agents';
+import { embedOne, parseResume } from '@tartan/agents';
 import {
   enqueueDeletion,
   enqueueExport,
@@ -66,6 +66,27 @@ import {
   UpdateProfileInput,
   UpdateVisibilityInput,
   UpdateVisibilityOutput,
+  UpsertSkillClaimInput,
+  UpsertSkillClaimOutput,
+  DeleteSkillClaimInput,
+  DeleteSkillClaimOutput,
+  UpsertStoryInput,
+  UpsertStoryOutput,
+  DeleteStoryInput,
+  DeleteStoryOutput,
+  UpdateEvidenceInput,
+  UpdateEvidenceOutput,
+  DeleteEvidenceInput,
+  DeleteEvidenceOutput,
+  OnboardingStateOutput,
+  SetLogisticsInput,
+  SetLogisticsOutput,
+  ParseResumeInput,
+  ParseResumeOutput,
+  CompleteOnboardingInput,
+  CompleteOnboardingOutput,
+  type EditableProfile,
+  type OnboardingStep,
   type CoachingReportBody,
   type DossierCompetencies,
   type DossierFlags,
@@ -81,6 +102,7 @@ import { router, studentProcedure, type TRPCContext } from '../trpc';
 import { writeLedgerEvent } from '@/lib/ledger';
 import { s3 } from '@/lib/s3';
 import { formatCompRange } from '@/lib/format';
+import { slugify } from '@/lib/resume';
 
 // The one async follow-up in the demo narrative. There is no async_questions
 // table in the schema; this is synthesized for the seeded Scogle SWE match so
@@ -393,6 +415,175 @@ async function assertOwnScreen(db: Db, screenId: string, studentId: string) {
     .limit(1);
   if (!rows[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your screen' });
   return rows[0];
+}
+
+// ── onboarding helpers ───────────────────────────────────────────────────────
+
+/**
+ * Whether a student has finished onboarding. onboarded_at is the authoritative
+ * flag, but the seeded demo students predate the column (null onboarded_at) yet
+ * have a fully authored profile — so a published screen OR any skill claim also
+ * counts as onboarded. This keeps demo accounts out of the wizard while a truly
+ * brand-new profile (no claims, no screen, null onboarded_at) is gated into it.
+ */
+export async function resolveOnboarded(
+  db: Db,
+  studentId: string,
+  onboardedAt: Date | null,
+): Promise<boolean> {
+  if (onboardedAt) return true;
+  const claim = await db
+    .select({ id: skillClaims.id })
+    .from(skillClaims)
+    .where(eq(skillClaims.studentId, studentId))
+    .limit(1);
+  if (claim[0]) return true;
+  const pub = await db
+    .select({ id: screens.id })
+    .from(screens)
+    .where(and(eq(screens.studentId, studentId), eq(screens.status, 'published')))
+    .limit(1);
+  return Boolean(pub[0]);
+}
+
+/**
+ * The editable Living Profile the wizard and the profile editor render/mutate.
+ * Mirrors ProfileOutput's Talent Graph / evidence / stories blocks but returns
+ * the flat editable scalars (identity + logistics) instead of the display chips.
+ * Authored stories are self-reported until the verification worker promotes
+ * them, matching the provenance grammar.
+ */
+async function buildEditableProfile(
+  db: Db,
+  studentId: string,
+): Promise<EditableProfile> {
+  const rows = await db
+    .select({
+      studentId: students.id,
+      name: users.name,
+      andrewId: students.andrewId,
+      kind: students.kind,
+      program: students.program,
+      gradDate: students.gradDate,
+      visibility: students.visibility,
+      workAuth: students.workAuth,
+      locations: students.locations,
+      compExpectation: students.compExpectation,
+      startupOpen: students.startupOpen,
+      onboardedAt: students.onboardedAt,
+    })
+    .from(students)
+    .innerJoin(users, eq(users.id, students.userId))
+    .where(eq(students.id, studentId))
+    .limit(1);
+  const r = rows[0];
+  if (!r) throw new TRPCError({ code: 'NOT_FOUND', message: 'student not found' });
+
+  const claimRows = await db
+    .select({
+      claimId: skillClaims.id,
+      skillId: skills.id,
+      slug: skills.slug,
+      name: skills.name,
+      track: skills.track,
+      courseCode: skills.courseCode,
+      proficiency: skillClaims.proficiency,
+      verified: skillClaims.verified,
+    })
+    .from(skillClaims)
+    .innerJoin(skills, eq(skills.id, skillClaims.skillId))
+    .where(eq(skillClaims.studentId, studentId))
+    .orderBy(asc(skillClaims.createdAt));
+
+  const edgeRows = await db
+    .select({ claimId: claimEvidence.claimId, evidenceId: claimEvidence.evidenceId })
+    .from(claimEvidence)
+    .innerJoin(skillClaims, eq(skillClaims.id, claimEvidence.claimId))
+    .where(eq(skillClaims.studentId, studentId))
+    .orderBy(asc(claimEvidence.id));
+  const byClaim = new Map<string, string[]>();
+  for (const e of edgeRows) {
+    const arr = byClaim.get(e.claimId) ?? [];
+    arr.push(e.evidenceId);
+    byClaim.set(e.claimId, arr);
+  }
+  const talentGraph = claimRows.map((c) => ({
+    skillId: c.skillId,
+    slug: c.slug,
+    name: c.name,
+    track: c.track,
+    courseCode: c.courseCode,
+    proficiency: c.proficiency,
+    verified: c.verified,
+    evidenceIds: byClaim.get(c.claimId) ?? [],
+  }));
+
+  const evidenceRows = await db
+    .select()
+    .from(evidence)
+    .where(eq(evidence.studentId, studentId))
+    .orderBy(asc(evidence.id));
+  const evidenceCards = evidenceRows.map((e) => ({
+    id: e.id,
+    type: e.type,
+    provenance: e.provenance,
+    title: e.title,
+    url: e.url,
+    meta: e.meta ?? {},
+    caption: e.type.replace(/_/g, ' '),
+  }));
+
+  const storyRows = await db
+    .select()
+    .from(experienceStories)
+    .where(eq(experienceStories.studentId, studentId))
+    .orderBy(asc(experienceStories.id));
+  const stories = storyRows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    situation: s.situation,
+    contribution: s.contribution,
+    outcome: s.outcome,
+    provenance: 'self_reported' as const,
+  }));
+
+  const onboarded = await resolveOnboarded(db, studentId, r.onboardedAt);
+
+  return {
+    studentId: r.studentId,
+    name: r.name,
+    andrewId: r.andrewId,
+    kind: r.kind,
+    program: r.program,
+    gradDateISO: r.gradDate ? r.gradDate.toISOString() : null,
+    visibility: r.visibility,
+    workAuth: r.workAuth ?? null,
+    locations: r.locations ?? [],
+    compExpectation: r.compExpectation ?? null,
+    startupOpen: r.startupOpen,
+    onboarded,
+    talentGraph,
+    evidence: evidenceCards,
+    stories,
+  };
+}
+
+/** Best resume point for the wizard: authored → review, logistics → author. */
+function deriveStep(profile: EditableProfile): OnboardingStep {
+  if (profile.onboarded) return 'done';
+  const hasAuthored =
+    profile.talentGraph.length > 0 ||
+    profile.stories.length > 0 ||
+    profile.evidence.length > 0;
+  if (hasAuthored) return 'review';
+  const hasLogistics =
+    Boolean(profile.program) ||
+    Boolean(profile.gradDateISO) ||
+    Boolean(profile.workAuth) ||
+    profile.locations.length > 0 ||
+    Boolean(profile.compExpectation);
+  if (hasLogistics) return 'author';
+  return 'welcome';
 }
 
 // ── router ──────────────────────────────────────────────────────────────────
@@ -1073,5 +1264,571 @@ export const studentRouter = router({
           caption: row.type.replace(/_/g, ' '),
         },
       };
+    }),
+
+  // ── Living Profile authoring ──────────────────────────────────────────────
+  // Manual create/edit of the Living Profile's skills, stories, and evidence.
+  // Every mutation is scoped to ctx.principal.studentId, writes a ledger 'edit',
+  // and keeps the trust invariant: `verified` is never accepted from the client
+  // (system-only) and edited evidence returns to pending provenance. The
+  // onboarding agent calls these by these exact names.
+
+  // The Living Profile read model (ProfileOutput.talentGraph) exposes skillId
+  // but not the underlying skill_claims.id that deleteSkillClaim keys on. This
+  // returns that mapping so the editor can wire a chip's remove control to its
+  // claim. Scoped to the student, read-only.
+  skillClaimIndex: studentProcedure
+    .output(
+      z.object({
+        items: z.array(
+          z.object({
+            skillId: z.string().uuid(),
+            skillClaimId: z.string().uuid(),
+          }),
+        ),
+      }),
+    )
+    .query(async ({ ctx }) => {
+      const rows = await ctx.db
+        .select({ skillId: skillClaims.skillId, skillClaimId: skillClaims.id })
+        .from(skillClaims)
+        .where(eq(skillClaims.studentId, ctx.principal.studentId));
+      return { items: rows };
+    }),
+
+  // Insert or update a skill claim. With skillClaimId it edits proficiency on an
+  // owned claim; without it, resolves skillSlug (or slugify(name)) to a skills
+  // taxonomy row — creating it (track null) when absent — then upserts the
+  // student's claim for that skill. verified stays system-set (never written).
+  upsertSkillClaim: studentProcedure
+    .input(UpsertSkillClaimInput)
+    .output(UpsertSkillClaimOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+
+      let claimId: string;
+      let skillId: string;
+
+      if (input.skillClaimId) {
+        const owned = await db
+          .select({ id: skillClaims.id, skillId: skillClaims.skillId })
+          .from(skillClaims)
+          .where(and(eq(skillClaims.id, input.skillClaimId), eq(skillClaims.studentId, studentId)))
+          .limit(1);
+        if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your skill claim' });
+        claimId = owned[0].id;
+        skillId = owned[0].skillId;
+        await db
+          .update(skillClaims)
+          .set({ proficiency: input.proficiency, updatedAt: new Date() })
+          .where(eq(skillClaims.id, claimId));
+      } else {
+        // Find-or-create the taxonomy row. A slug collision reuses the existing
+        // skill so two students naming "Rust" share one node.
+        const slug = input.skillSlug?.trim() || slugify(input.skillName);
+        const existingSkill = await db
+          .select({ id: skills.id })
+          .from(skills)
+          .where(eq(skills.slug, slug))
+          .limit(1);
+        skillId = existingSkill[0]
+          ? existingSkill[0].id
+          : (
+              await db
+                .insert(skills)
+                .values({ slug, name: input.skillName, track: null })
+                .returning({ id: skills.id })
+            )[0]!.id;
+
+        // Upsert the student's claim for that skill (one claim per skill).
+        const existingClaim = await db
+          .select({ id: skillClaims.id })
+          .from(skillClaims)
+          .where(and(eq(skillClaims.studentId, studentId), eq(skillClaims.skillId, skillId)))
+          .limit(1);
+        if (existingClaim[0]) {
+          claimId = existingClaim[0].id;
+          await db
+            .update(skillClaims)
+            .set({ proficiency: input.proficiency, updatedAt: new Date() })
+            .where(eq(skillClaims.id, claimId));
+        } else {
+          claimId = (
+            await db
+              .insert(skillClaims)
+              .values({ studentId, skillId, proficiency: input.proficiency, verified: false })
+              .returning({ id: skillClaims.id })
+          )[0]!.id;
+        }
+      }
+
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'skill',
+          note: `You saved the skill "${input.skillName}" at proficiency ${input.proficiency}.`,
+        },
+      });
+
+      const skillRow = (
+        await db.select().from(skills).where(eq(skills.id, skillId)).limit(1)
+      )[0]!;
+      const claimRow = (
+        await db
+          .select({ proficiency: skillClaims.proficiency, verified: skillClaims.verified })
+          .from(skillClaims)
+          .where(eq(skillClaims.id, claimId))
+          .limit(1)
+      )[0]!;
+      const edges = await db
+        .select({ evidenceId: claimEvidence.evidenceId })
+        .from(claimEvidence)
+        .where(eq(claimEvidence.claimId, claimId))
+        .orderBy(asc(claimEvidence.id));
+
+      return {
+        skill: {
+          skillId: skillRow.id,
+          slug: skillRow.slug,
+          name: skillRow.name,
+          track: skillRow.track,
+          courseCode: skillRow.courseCode,
+          proficiency: claimRow.proficiency,
+          verified: claimRow.verified,
+          evidenceIds: edges.map((e) => e.evidenceId),
+        },
+      };
+    }),
+
+  // Delete a skill claim (its claim_evidence edges cascade). The shared skills
+  // taxonomy row is left intact — other students may claim it.
+  deleteSkillClaim: studentProcedure
+    .input(DeleteSkillClaimInput)
+    .output(DeleteSkillClaimOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select({ id: skillClaims.id, skillId: skillClaims.skillId })
+        .from(skillClaims)
+        .where(and(eq(skillClaims.id, input.skillClaimId), eq(skillClaims.studentId, studentId)))
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your skill claim' });
+      const skillName = (
+        await db
+          .select({ name: skills.name })
+          .from(skills)
+          .where(eq(skills.id, owned[0].skillId))
+          .limit(1)
+      )[0]?.name;
+      // claim_evidence.claim_id cascades on delete; the edges go with the claim.
+      await db.delete(skillClaims).where(eq(skillClaims.id, input.skillClaimId));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'skill',
+          note: `You removed the skill "${skillName ?? 'a skill'}" from your Talent Graph.`,
+        },
+      });
+      return { skillClaimId: input.skillClaimId, deleted: true };
+    }),
+
+  // Insert or update an experience story. A missing outcome stays null (renders
+  // the italic prompt, never invented). Embeds on save, best-effort.
+  upsertStory: studentProcedure
+    .input(UpsertStoryInput)
+    .output(UpsertStoryOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const outcome = input.outcome?.trim() ? input.outcome : null;
+
+      let embedding: number[] | null = null;
+      try {
+        embedding = await embedOne(
+          `${input.title}\n${input.situation}\n${input.contribution}\n${outcome ?? ''}`,
+        );
+      } catch {
+        embedding = null; // embeddings are an optimization, never a blocker
+      }
+
+      let row: typeof experienceStories.$inferSelect;
+      if (input.storyId) {
+        const owned = await db
+          .select({ id: experienceStories.id })
+          .from(experienceStories)
+          .where(
+            and(
+              eq(experienceStories.id, input.storyId),
+              eq(experienceStories.studentId, studentId),
+            ),
+          )
+          .limit(1);
+        if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your story' });
+        const set: Record<string, unknown> = {
+          title: input.title,
+          situation: input.situation,
+          contribution: input.contribution,
+          outcome,
+          updatedAt: new Date(),
+        };
+        if (embedding) set.embedding = embedding;
+        row = (
+          await db
+            .update(experienceStories)
+            .set(set)
+            .where(eq(experienceStories.id, input.storyId))
+            .returning()
+        )[0]!;
+      } else {
+        row = (
+          await db
+            .insert(experienceStories)
+            .values({
+              studentId,
+              title: input.title,
+              situation: input.situation,
+              contribution: input.contribution,
+              outcome,
+              embedding,
+            })
+            .returning()
+        )[0]!;
+      }
+
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'story',
+          note: `You saved the experience story "${input.title}".`,
+        },
+      });
+
+      return {
+        story: {
+          id: row.id,
+          title: row.title,
+          situation: row.situation,
+          contribution: row.contribution,
+          outcome: row.outcome,
+          provenance: (row.outcome ? 'verified' : 'self_reported') as
+            | 'verified'
+            | 'self_reported',
+        },
+      };
+    }),
+
+  deleteStory: studentProcedure
+    .input(DeleteStoryInput)
+    .output(DeleteStoryOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select({ id: experienceStories.id, title: experienceStories.title })
+        .from(experienceStories)
+        .where(
+          and(
+            eq(experienceStories.id, input.storyId),
+            eq(experienceStories.studentId, studentId),
+          ),
+        )
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your story' });
+      await db.delete(experienceStories).where(eq(experienceStories.id, input.storyId));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'story',
+          note: `You removed the experience story "${owned[0].title}".`,
+        },
+      });
+      return { storyId: input.storyId, deleted: true };
+    }),
+
+  // Update an existing evidence item. Any edit re-opens provenance to pending
+  // (the previously-checked artifact may have changed) and re-queues the
+  // verification worker; `verified`/provenance are never taken from the client.
+  updateEvidence: studentProcedure
+    .input(UpdateEvidenceInput)
+    .output(UpdateEvidenceOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select()
+        .from(evidence)
+        .where(and(eq(evidence.id, input.evidenceId), eq(evidence.studentId, studentId)))
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your evidence' });
+      const cur = owned[0];
+
+      const nextTitle = input.title ?? cur.title;
+      const nextUrl = input.url !== undefined ? input.url : cur.url;
+      let embedding: number[] | null = cur.embedding;
+      try {
+        embedding = await embedOne(`${cur.type}: ${nextTitle} ${nextUrl ?? ''}`);
+      } catch {
+        // keep the prior embedding if re-embedding fails
+      }
+
+      const patch: Record<string, unknown> = {
+        provenance: 'pending',
+        embedding,
+        updatedAt: new Date(),
+      };
+      if (input.title !== undefined) patch.title = input.title;
+      if (input.url !== undefined) patch.url = input.url; // null clears the link
+      if (input.meta !== undefined) patch.meta = input.meta;
+
+      const row = (
+        await db
+          .update(evidence)
+          .set(patch)
+          .where(eq(evidence.id, input.evidenceId))
+          .returning()
+      )[0]!;
+
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'evidence',
+          note: `You edited "${row.title}". Verification is queued again.`,
+        },
+      });
+      try {
+        await enqueueVerification({ evidenceId: row.id, studentId });
+      } catch {
+        // Redis unreachable: it stays pending; the sweep re-checks it later.
+      }
+
+      return {
+        evidence: {
+          id: row.id,
+          type: row.type,
+          provenance: row.provenance,
+          title: row.title,
+          url: row.url,
+          meta: row.meta ?? {},
+          caption: row.type.replace(/_/g, ' '),
+        },
+      };
+    }),
+
+  // Delete an evidence item. claim_evidence edges cascade on evidence delete;
+  // the skill claims they wired stay (they simply lose that proof).
+  deleteEvidence: studentProcedure
+    .input(DeleteEvidenceInput)
+    .output(DeleteEvidenceOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select({ id: evidence.id, title: evidence.title })
+        .from(evidence)
+        .where(and(eq(evidence.id, input.evidenceId), eq(evidence.studentId, studentId)))
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your evidence' });
+      await db.delete(evidence).where(eq(evidence.id, input.evidenceId));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'evidence',
+          note: `You removed the evidence "${owned[0].title}".`,
+        },
+      });
+      return { evidenceId: input.evidenceId, deleted: true };
+    }),
+
+  // ── onboarding ────────────────────────────────────────────────────────────
+  // The self-serve wizard's read + write surface. onboardingState is the gate
+  // signal (also fetched by middleware) and the wizard's initial data;
+  // setLogistics/parseResume/completeOnboarding are its writes. Authoring of
+  // skills/stories/evidence reuses the upsert*/delete* procedures above.
+
+  // Gate + hydrate. Returns whether onboarding is complete, the best resume
+  // step, and the editable profile the wizard renders.
+  onboardingState: studentProcedure
+    .output(OnboardingStateOutput)
+    .query(async ({ ctx }) => {
+      const profile = await buildEditableProfile(ctx.db, ctx.principal.studentId);
+      return { step: deriveStep(profile), onboarded: profile.onboarded, profile };
+    }),
+
+  // The logistics step: program, expected graduation, degree kind, work
+  // authorization, target locations, comp expectation, startup interest. All
+  // fields optional so partial saves work; writes one ledger edit.
+  setLogistics: studentProcedure
+    .input(SetLogisticsInput)
+    .output(SetLogisticsOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const patch: Record<string, unknown> = {};
+      if (input.program !== undefined) patch.program = input.program;
+      if (input.gradDateISO !== undefined) patch.gradDate = new Date(input.gradDateISO);
+      if (input.kind !== undefined) patch.kind = input.kind;
+      if (input.workAuth !== undefined) patch.workAuth = input.workAuth;
+      if (input.locations !== undefined) patch.locations = input.locations;
+      if (input.compExpectation !== undefined) patch.compExpectation = input.compExpectation;
+      if (input.startupOpen !== undefined) patch.startupOpen = input.startupOpen;
+      if (Object.keys(patch).length) {
+        patch.updatedAt = new Date();
+        await db.update(students).set(patch).where(eq(students.id, studentId));
+        await writeLedgerEvent({
+          studentId,
+          actorKind: 'student',
+          actorId: ctx.principal.userId,
+          kind: 'edit',
+          detail: {
+            kind: 'edit',
+            field: 'logistics',
+            note: 'You updated your logistics and preferences.',
+          },
+        });
+      }
+      return { profile: await buildEditableProfile(db, studentId) };
+    }),
+
+  // Resume-parse jump-start. Stashes the extracted text (audit + re-parse), then
+  // runs the live Synthesizer parse (agent_runs is written inside runAgent). The
+  // draft is NOT committed here — the wizard pre-fills the review step with it,
+  // and each item is only persisted when the student saves it (as
+  // pending/self_reported). PDF→text extraction happens at /onboarding/extract;
+  // this mutation takes the already-extracted text.
+  parseResume: studentProcedure
+    .input(ParseResumeInput)
+    .output(ParseResumeOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      await db
+        .update(students)
+        .set({ resumeText: input.text, updatedAt: new Date() })
+        .where(eq(students.id, studentId));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'resume',
+          note: 'You uploaded a resume to jump-start your profile. Everything it drafts is self-reported until verified.',
+        },
+      });
+      const draft = await parseResume(input.text);
+      return { draft };
+    }),
+
+  // Finish onboarding: stamp onboarded_at (the gate flips), optionally apply a
+  // final visibility choice so "finish and go live" is one action. A brand-new
+  // profile without a published screen is correctly still not in sponsor results
+  // — that is by design (the sponsor_visible_students view needs a screen).
+  completeOnboarding: studentProcedure
+    .input(CompleteOnboardingInput)
+    .output(CompleteOnboardingOutput)
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const now = new Date();
+      const patch: Record<string, unknown> = { onboardedAt: now, updatedAt: now };
+      if (input.visibility !== undefined) patch.visibility = input.visibility;
+      await db.update(students).set(patch).where(eq(students.id, studentId));
+      if (input.visibility !== undefined) {
+        await writeLedgerEvent({
+          studentId,
+          actorKind: 'student',
+          actorId: ctx.principal.userId,
+          kind: 'edit',
+          detail: {
+            kind: 'edit',
+            field: 'visibility',
+            note: `You set visibility to ${input.visibility}. Effective now, including the MCP layer.`,
+          },
+        });
+      }
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'onboarding',
+          note: 'You finished onboarding. Your Living Profile is live.',
+        },
+      });
+      const cur = await db
+        .select({ visibility: students.visibility })
+        .from(students)
+        .where(eq(students.id, studentId))
+        .limit(1);
+      return {
+        onboarded: true,
+        onboardedAt: now.toISOString(),
+        visibility: cur[0]!.visibility,
+      };
+    }),
+
+  // Remove a skill from the profile, keyed by skillId. The profile editor's
+  // deleteSkillClaim is keyed by skillClaimId, but the read model (TalentGraphSkill)
+  // only exposes skillId — so onboarding/editor UIs that render the graph need a
+  // skillId-keyed delete. Scoped to the student's own claim; edges cascade.
+  removeSkillBySkillId: studentProcedure
+    .input(z.object({ skillId: z.string().uuid() }))
+    .output(z.object({ skillId: z.string().uuid(), deleted: z.literal(true) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = ctx.db;
+      const studentId = ctx.principal.studentId;
+      const owned = await db
+        .select({ id: skillClaims.id })
+        .from(skillClaims)
+        .where(and(eq(skillClaims.studentId, studentId), eq(skillClaims.skillId, input.skillId)))
+        .limit(1);
+      if (!owned[0]) throw new TRPCError({ code: 'NOT_FOUND', message: 'no claim for that skill' });
+      const nameRows = await db
+        .select({ name: skills.name })
+        .from(skills)
+        .where(eq(skills.id, input.skillId))
+        .limit(1);
+      await db.delete(skillClaims).where(eq(skillClaims.id, owned[0].id));
+      await writeLedgerEvent({
+        studentId,
+        actorKind: 'student',
+        actorId: ctx.principal.userId,
+        kind: 'edit',
+        detail: {
+          kind: 'edit',
+          field: 'skill',
+          note: `You removed the skill "${nameRows[0]?.name ?? 'skill'}".`,
+        },
+      });
+      return { skillId: input.skillId, deleted: true };
     }),
 });

@@ -17,6 +17,7 @@ import type {
   ExperienceStories,
   IntakeExtraction,
   RecruiterRanking,
+  ResumeParseResult,
   SentinelDigest,
   VerifierVerdict,
 } from '@tartan/types';
@@ -183,6 +184,48 @@ export const stubSentinelDigest: SentinelDigest = {
   confidence: 0.7,
 };
 
+// ── Resume parse: onboarding jump-start draft ────────────────────────────────
+// Reuses the Alex Rivera fixture resume so stub output reads like the real
+// parse. Everything here is self-reported (a resume is a claim), so downstream
+// it lands as pending/self_reported and unverified.
+export const stubResumeParseResult: ResumeParseResult = {
+  logistics: {
+    program: 'B.S. Computer Science',
+    gradDateISO: '2027-05-01',
+    kind: 'undergrad',
+    workAuth: { status: 'citizen', needsSponsorship: false },
+    locations: ['Pittsburgh, PA', 'Kirkland, WA', 'Remote (US)'],
+    compExpectation: { min: 50, max: 60, hourly: true },
+    startupOpen: false,
+  },
+  skills: [
+    { name: 'Distributed systems', slug: 'distributed-systems', proficiency: 5, evidenceHint: 'TA for 15-440; railforge replicated log' },
+    { name: 'Go', slug: 'go', proficiency: 4, evidenceHint: 'Stripe rate-limiting service in Go' },
+    { name: 'Rust', slug: 'rust', proficiency: 4, evidenceHint: 'railforge leaderless replicated log' },
+    { name: 'PostgreSQL', slug: 'database-systems', evidenceHint: '15-445 B+ tree with buffer pool and WAL' },
+  ],
+  stories: [
+    {
+      title: 'Rate-limiting service, Stripe',
+      situation: 'Summer 2026 internship on infrastructure at Stripe.',
+      contribution: 'Built a token-bucket rate limiter in Go backed by Redis handling 80k req/s, and the shadow-traffic harness that validated the rollout.',
+      outcome: 'Cut p99 latency from 45ms to 8ms.',
+    },
+    {
+      title: 'railforge, leaderless replicated log',
+      situation: 'Personal systems project in Rust.',
+      contribution: 'Implemented read-repair and bounded staleness over a leaderless replicated log.',
+      outcome: 'Sustained 3x baseline throughput under simulated network partitions.',
+    },
+  ],
+  evidence: [
+    { type: 'work', title: 'Software Engineering Intern, Stripe', note: 'Summer 2026; rate-limiting service in Go.' },
+    { type: 'repo', title: 'railforge', url: 'https://github.com/alexrivera-cmu/railforge', note: 'Leaderless replicated log in Rust.' },
+    { type: 'course', title: '15-440', note: 'Distributed Systems; TA, Spring 2026.' },
+    { type: 'course', title: '15-445', note: 'Database Systems; B+ tree with buffer pool and WAL.' },
+  ],
+};
+
 // Default free-text stub for non-structured (streaming) calls like the Rep.
 export const STUB_TEXT =
   'Thanks, that is a great place to start. Tell me about a project where something broke and you had to figure out why.';
@@ -190,6 +233,12 @@ export const STUB_TEXT =
 // Ordered list of every canned structured output. getStubOutput scans this and
 // returns the first value that satisfies the requested schema.
 const CANNED_OUTPUTS: readonly unknown[] = [
+  // ResumeParseResult is intentionally first: its fields are all
+  // optional-with-defaults, so a loose scan would let another stub (e.g. the
+  // dossier draft) satisfy it as an empty draft. Listing it first makes a
+  // ResumeParseResult request resolve to this real draft. It does not match any
+  // other agent's schema (those require fields this object lacks).
+  stubResumeParseResult,
   stubDossierDraft,
   stubCoachingReport,
   stubExperienceStories,

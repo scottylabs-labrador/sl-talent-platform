@@ -182,6 +182,18 @@ export function OpsConsole({
         </a>
         <span className={styles.divider} />
         <span className={styles.brand}>Talent Ops</span>
+        <nav className={styles.nav}>
+          <a
+            className={`${styles.navTab} ${styles.navTabActive}`}
+            href="/ops"
+            aria-current="page"
+          >
+            Exception queue
+          </a>
+          <a className={styles.navTab} href="/ops/students">
+            Students
+          </a>
+        </nav>
         <span className={styles.scopePill}>
           internal · volunteers handle exceptions, agents handle everything else
         </span>

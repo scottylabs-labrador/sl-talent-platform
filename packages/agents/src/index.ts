@@ -10,3 +10,4 @@ export * from './embeddings.js';
 export * from './guards.js';
 export * from './prompts.js';
 export * from './stubs.js';
+export * from './resume.js';
