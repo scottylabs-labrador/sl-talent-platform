@@ -79,6 +79,23 @@ environment contract and `docs/DECISIONS.md` for the reasoning.
 - The intake validator refuses filters that proxy protected classes,
   deterministically, before any model sees them.
 
+## Status
+
+Live on Railway in both environments, every surface and agent working for
+real (no demo-only stubs):
+
+- **Production**: https://web-production-6f576.up.railway.app
+- **Dev**: https://web-dev-1950.up.railway.app
+
+Sign in with Google (CMU `andrew.cmu.edu` for students) or the seeded demo
+accounts on the login page. Real integrations wired and verified end to end:
+per-agent OpenRouter routing (rep on Haiku 4.5, synthesis/recruiter on Opus
+4.8, concierge/coach on Sonnet 5), Cartesia STT+TTS on the live voice path,
+S3 stream-only audio, the recruiter matching pipeline behind the human gate,
+evidence verification, data export and account deletion workers, and the
+compliance controls above. The CallRoom runs the real Cartesia pipeline when
+a mic is present and a labelled simulation otherwise (`VOICE_SIMULATION`).
+
 ## Deploy
 
 One Railway project, `production` and `dev` environments, services `web`,
