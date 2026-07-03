@@ -52,6 +52,9 @@ export const EvidenceMeta = z.object({
   momentId: z.string().uuid().optional(),
   screenId: z.string().uuid().optional(),
   timestampMs: z.number().int().nonnegative().optional(),
+  // The verifier's note when a check ran but could not confirm (e.g. repo
+  // authorship did not match); surfaced to the student on the pending chip.
+  verificationNote: z.string().optional(),
 });
 export type EvidenceMeta = z.infer<typeof EvidenceMeta>;
 
