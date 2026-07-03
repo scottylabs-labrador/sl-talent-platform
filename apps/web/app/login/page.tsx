@@ -7,6 +7,7 @@
 
 import { redirect } from 'next/navigation';
 import { auth, signIn } from '@/auth';
+import { sessionPrincipalExists } from '@/lib/auth-user';
 import { Card, BrandGlyph, Pill } from '@/components/ui';
 import styles from './login.module.css';
 
@@ -39,8 +40,19 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ callbackUrl?: string }>;
 }) {
+  // Redirect an authenticated visitor to their surface, but only if the session
+  // is still valid. A stale session (backing row removed) renders the login
+  // page so they can sign in fresh, rather than looping through requireSession.
   const session = await auth();
-  if (session?.user?.userId) redirect('/');
+  if (session?.user?.userId) {
+    const valid = await sessionPrincipalExists({
+      userId: session.user.userId,
+      role: session.user.role,
+      studentId: session.user.studentId,
+      orgId: session.user.orgId,
+    });
+    if (valid) redirect('/');
+  }
 
   const { callbackUrl } = await searchParams;
   const redirectTo = callbackUrl && callbackUrl.startsWith('/') ? callbackUrl : '/';

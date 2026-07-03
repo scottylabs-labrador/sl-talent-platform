@@ -14,6 +14,7 @@ import {
   provisionTestUser,
   resolveOrProvisionCmuStudent,
   resolveUser,
+  sessionPrincipalExists,
   type TestRole,
   type UserClaims,
 } from './lib/auth-user';
@@ -164,5 +165,14 @@ export async function requireSession(role?: UserRole) {
   if (role && session.user.role !== role) {
     redirect(homeForRole(session.user.role));
   }
+  // Stale-session guard: if the backing row is gone (e.g. after a data reset),
+  // send them to sign in fresh rather than 500 on a missing row downstream.
+  const stillValid = await sessionPrincipalExists({
+    userId: session.user.userId,
+    role: session.user.role,
+    studentId: session.user.studentId,
+    orgId: session.user.orgId,
+  });
+  if (!stillValid) redirect('/login?stale=1');
   return session;
 }

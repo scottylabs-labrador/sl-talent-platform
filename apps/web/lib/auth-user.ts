@@ -21,6 +21,48 @@ export function isCmuEmail(email: string): boolean {
   return email.toLowerCase().endsWith(`@${CMU_HD}`);
 }
 
+/**
+ * Whether the row(s) a session's claims point at still exist. A session can go
+ * stale if its backing user/student/org was removed (e.g. a database reset)
+ * while the JWT cookie lives on. Guards redirect a stale session to sign in
+ * fresh instead of 500ing on a missing row.
+ */
+export async function sessionPrincipalExists(claims: {
+  userId?: string;
+  role?: UserRole;
+  studentId?: string;
+  orgId?: string;
+}): Promise<boolean> {
+  if (!claims.userId) return false;
+  const u = await db()
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, claims.userId))
+    .limit(1);
+  if (!u[0]) return false;
+
+  if (claims.role === 'student') {
+    if (!claims.studentId) return false;
+    const s = await db()
+      .select({ id: students.id })
+      .from(students)
+      .where(eq(students.id, claims.studentId))
+      .limit(1);
+    return Boolean(s[0]);
+  }
+  if (claims.role === 'sponsor') {
+    if (!claims.orgId) return false;
+    const o = await db()
+      .select({ id: sponsorOrgs.id })
+      .from(sponsorOrgs)
+      .where(eq(sponsorOrgs.id, claims.orgId))
+      .limit(1);
+    return Boolean(o[0]);
+  }
+  // operator: the users row is sufficient.
+  return true;
+}
+
 /** Fill role-specific claims (studentId / orgId+memberRole) for a users row. */
 async function enrich(row: {
   id: string;
