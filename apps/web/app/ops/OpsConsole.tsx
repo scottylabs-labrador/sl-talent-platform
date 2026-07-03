@@ -119,11 +119,18 @@ function ArrowLeftIcon() {
 
 export interface SidebarData {
   week: string;
-  digestSent: string;
-  medianResolveMin: number;
+  medianResolveMin: number | null;
   stats: { label: string; value: string; color: string }[];
   adverseImpact: { body: string; meta: string };
-  workforce: { name: string; note: string; eval: string; aut: string; dot: string }[];
+  workforce: {
+    agent: AgentName;
+    name: string;
+    note: string;
+    autonomy: 'A' | 'B' | 'C';
+    dot: string;
+    // Live activity summary (replaces the old fabricated eval score).
+    signal: string;
+  }[];
 }
 
 export interface OpsConsoleProps {
@@ -199,9 +206,7 @@ export function OpsConsole({
           internal · volunteers handle exceptions, agents handle everything else
         </span>
         <div className={styles.headerMeta}>
-          <span className={styles.digestStamp}>
-            {sidebar.week} · {sidebar.digestSent}
-          </span>
+          <span className={styles.digestStamp}>{sidebar.week}</span>
           <button
             type="button"
             className={styles.avatar}
@@ -227,7 +232,9 @@ export function OpsConsole({
               </span>
             </div>
             <span className={styles.medianStamp}>
-              median this wk: {sidebar.medianResolveMin} min
+              {sidebar.medianResolveMin == null
+                ? 'median this wk: no resolutions yet'
+                : `median this wk: ${sidebar.medianResolveMin} min`}
             </span>
           </div>
 
@@ -345,7 +352,7 @@ export function OpsConsole({
           {allDone && (
             <div className={styles.emptyState}>
               <span className={styles.emptyText}>
-                Queue clear. The agents have the rest. See you at the Monday digest.
+                Queue clear. The agents have the rest.
               </span>
             </div>
           )}
@@ -368,17 +375,17 @@ export function OpsConsole({
           <div className={styles.workforceCard}>
             <div className={styles.workforceHeader}>
               <span className={styles.cardLabel}>Agent workforce</span>
-              <span className={styles.workforceRight}>eval / autonomy</span>
+              <span className={styles.workforceRight}>activity / autonomy</span>
             </div>
             {sidebar.workforce.map((a) => (
-              <div key={a.name} className={styles.agentRow}>
+              <div key={a.agent} className={styles.agentRow}>
                 <span className={styles.agentDot} style={{ background: a.dot }} />
                 <div className={styles.agentNameCol}>
                   <span className={styles.agentName}>{a.name}</span>
                   <span className={styles.agentNote}>{a.note}</span>
                 </div>
-                <span className={styles.agentEval}>{a.eval}</span>
-                <span className={styles.agentAut}>{a.aut}</span>
+                <span className={styles.agentEval}>{a.signal}</span>
+                <span className={styles.agentAut}>{a.autonomy}</span>
               </div>
             ))}
             <span className={styles.footnote}>

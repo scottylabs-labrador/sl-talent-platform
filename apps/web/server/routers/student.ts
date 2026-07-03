@@ -104,26 +104,6 @@ import { s3 } from '@/lib/s3';
 import { formatCompRange } from '@/lib/format';
 import { slugify } from '@/lib/resume';
 
-// The one async follow-up in the demo narrative. There is no async_questions
-// table in the schema; this is synthesized for the seeded Scogle SWE match so
-// the Matches record flow has something to answer. (Flagged in the report.)
-const ASYNC_QUESTION_ID = 'd51d0000-0000-4000-8000-0000000f0001';
-const ASYNC_QUESTION_TEXT =
-  'RailTrace buffered bursty writes for one rail line. What breaks first if Scogle pointed 40,000 fleet units at it, and what would you change?';
-
-const STRENGTH_BASE = 82; // design canonical (no strength column exists)
-const STRENGTH_PUBLISHED_BONUS = 6; // -> 88 when published (student-app.md)
-
-// Desired left-column order of the Talent Graph skills (design sk1..sk6).
-const SKILL_ORDER = [
-  'distributed-systems',
-  'systems-programming-c',
-  'database-systems',
-  'go',
-  'react',
-  'kubernetes',
-];
-
 type Db = TRPCContext['db'];
 
 // ── shared loaders ──────────────────────────────────────────────────────────
@@ -322,12 +302,18 @@ async function buildProfile(db: Db, studentId: string) {
     byClaim.set(e.claimId, arr);
   }
 
+  // Real ordering: verified claims first, then by proficiency, then by the
+  // number of evidence edges, then by name for a stable tiebreak. No fixed
+  // demo slug list — any student's real skills render sensibly.
   const talentGraph = claimRows
     .slice()
     .sort((a, b) => {
-      const ia = SKILL_ORDER.indexOf(a.slug);
-      const ib = SKILL_ORDER.indexOf(b.slug);
-      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+      if (a.verified !== b.verified) return a.verified ? -1 : 1;
+      if (a.proficiency !== b.proficiency) return b.proficiency - a.proficiency;
+      const ea = (byClaim.get(a.claimId) ?? []).length;
+      const eb = (byClaim.get(b.claimId) ?? []).length;
+      if (ea !== eb) return eb - ea;
+      return a.name.localeCompare(b.name);
     })
     .map((c) => ({
       skillId: c.skillId,
@@ -586,6 +572,108 @@ function deriveStep(profile: EditableProfile): OnboardingStep {
   return 'welcome';
 }
 
+// Real profile-strength score. Five equally weighted completeness signals,
+// 20 points each (0-100): has any skill, has verified evidence, has a story
+// with a measured outcome, has logistics set, and has a published/approved
+// Talent Rep screen. doNext points at the biggest missing piece with an honest,
+// specific suggestion — never a hardcoded name or "+4" copy.
+async function computeStrengthMeter(
+  db: Db,
+  studentId: string,
+  published: boolean,
+): Promise<{ label: string; value: number; doNext: string }> {
+  const claimRows = await db
+    .select({
+      claimId: skillClaims.id,
+      name: skills.name,
+    })
+    .from(skillClaims)
+    .innerJoin(skills, eq(skills.id, skillClaims.skillId))
+    .where(eq(skillClaims.studentId, studentId))
+    .orderBy(asc(skillClaims.id));
+
+  const evRows = await db
+    .select({ provenance: evidence.provenance })
+    .from(evidence)
+    .where(eq(evidence.studentId, studentId));
+
+  const storyRows = await db
+    .select({ title: experienceStories.title, outcome: experienceStories.outcome })
+    .from(experienceStories)
+    .where(eq(experienceStories.studentId, studentId))
+    .orderBy(asc(experienceStories.id));
+
+  const edgeRows = await db
+    .select({ claimId: claimEvidence.claimId })
+    .from(claimEvidence)
+    .innerJoin(skillClaims, eq(skillClaims.id, claimEvidence.claimId))
+    .where(eq(skillClaims.studentId, studentId));
+  const claimsWithEvidence = new Set(edgeRows.map((e) => e.claimId));
+
+  const stuRows = await db
+    .select({
+      program: students.program,
+      gradDate: students.gradDate,
+      workAuth: students.workAuth,
+      locations: students.locations,
+      compExpectation: students.compExpectation,
+    })
+    .from(students)
+    .where(eq(students.id, studentId))
+    .limit(1);
+  const stu = stuRows[0];
+
+  const hasSkills = claimRows.length > 0;
+  const hasVerifiedEvidence = evRows.some((e) => e.provenance === 'verified');
+  const hasStoryOutcome = storyRows.some((s) => Boolean(s.outcome));
+  const hasLogistics = Boolean(
+    stu &&
+      (stu.program ||
+        stu.gradDate ||
+        stu.workAuth ||
+        (stu.locations && stu.locations.length > 0) ||
+        stu.compExpectation),
+  );
+
+  const signals = [hasSkills, hasVerifiedEvidence, hasStoryOutcome, hasLogistics, published];
+  const value = signals.filter(Boolean).length * 20;
+
+  // Biggest missing piece, most fundamental first.
+  const storyWithoutOutcome = storyRows.find((s) => !s.outcome);
+  const skillWithoutEvidence = claimRows.find((c) => !claimsWithEvidence.has(c.claimId));
+  let doNext: string;
+  if (!hasSkills) {
+    doNext = 'Add your first skill to your Talent Graph.';
+  } else if (storyRows.length === 0) {
+    doNext = 'Add a story about your best work.';
+  } else if (storyWithoutOutcome) {
+    doNext = `Add a measured outcome to your ${storyWithoutOutcome.title} story.`;
+  } else if (skillWithoutEvidence) {
+    doNext = `Add evidence to ${skillWithoutEvidence.name}.`;
+  } else if (!published) {
+    doNext = 'Book your Talent Rep screen.';
+  } else if (!hasLogistics) {
+    doNext = 'Set your availability and locations.';
+  } else {
+    doNext = 'Your profile is looking strong. Keep it fresh.';
+  }
+
+  return { label: 'Profile strength', value, doNext };
+}
+
+// Real timeline position for a shortlist entry against the 5-step ladder
+// (Matched, Shortlisted, Intro, Interview, Outcome). A shortlisted entry is at
+// least step 2; 'intro' advances to step 3. Derived from the entry's real
+// status, never a fixed constant.
+function entryTimeline(status: string): { done: number; tag: string } {
+  switch (status) {
+    case 'intro':
+      return { done: 3, tag: 'Intro' };
+    default:
+      return { done: 2, tag: 'Shortlisted' };
+  }
+}
+
 // ── router ──────────────────────────────────────────────────────────────────
 
 export const studentRouter = router({
@@ -596,11 +684,7 @@ export const studentRouter = router({
     const rep = await loadRepresentativeScreen(db, studentId);
     const published = rep?.screen.status === 'published' && rep.dossier?.status === 'approved';
 
-    const strengthMeter = {
-      label: 'Profile strength',
-      value: STRENGTH_BASE + (published ? STRENGTH_PUBLISHED_BONUS : 0),
-      doNext: 'add a measured outcome to your Meridian internship story',
-    };
+    const strengthMeter = await computeStrengthMeter(db, studentId, published);
 
     const startHref = rep ? `/call/${rep.screen.id}` : '/interviews';
     const primaryAction = {
@@ -626,14 +710,17 @@ export const studentRouter = router({
       .orderBy(asc(shortlistEntries.rank))
       .limit(1);
     const liveMatch = entryRows[0]
-      ? {
-          entryId: entryRows[0].entryId,
-          company: entryRows[0].orgName,
-          roleTitle: entryRows[0].jobTitle,
-          statusTag: 'Shortlisted',
-          stepsDone: 2,
-          stepLabels: ['Matched', 'Shortlisted', 'Intro', 'Interview', 'Outcome'],
-        }
+      ? (() => {
+          const tl = entryTimeline(entryRows[0]!.status);
+          return {
+            entryId: entryRows[0]!.entryId,
+            company: entryRows[0]!.orgName,
+            roleTitle: entryRows[0]!.jobTitle,
+            statusTag: tl.tag,
+            stepsDone: tl.done,
+            stepLabels: ['Matched', 'Shortlisted', 'Intro', 'Interview', 'Outcome'],
+          };
+        })()
       : null;
 
     const { entries: ledgerPreview } = await loadLedger(db, studentId, 4);
@@ -937,6 +1024,7 @@ export const studentRouter = router({
         status: shortlistEntries.status,
         kind: shortlistEntries.kind,
         revealConsent: shortlistEntries.revealConsent,
+        asyncAnswer: shortlistEntries.asyncAnswer,
         jobTitle: jobs.title,
         orgName: sponsorOrgs.name,
         compRange: jobs.compRange,
@@ -949,19 +1037,26 @@ export const studentRouter = router({
       .orderBy(asc(shortlistEntries.rank));
 
     return {
-      matches: rows.map((r) => ({
-        entryId: r.entryId,
-        company: r.orgName,
-        roleTitle: r.jobTitle,
-        compLabel: r.compRange ? formatCompRange(r.compRange) : 'comp disclosed',
-        status: r.status,
-        kind: r.kind,
-        revealConsent: r.revealConsent,
-        timelineDone: 2,
-        asyncQuestion: r.jobTitle.startsWith('SWE Intern')
-          ? { id: ASYNC_QUESTION_ID, text: ASYNC_QUESTION_TEXT, answered: false }
-          : null,
-      })),
+      matches: rows.map((r) => {
+        // A follow-up shows only when the recruiter actually posed one on this
+        // entry (async_answer.question). Answered once the student has recorded
+        // audio or typed a reply. No question -> just the role + timeline.
+        const question = r.asyncAnswer?.question;
+        const answered = Boolean(r.asyncAnswer?.audioKey || r.asyncAnswer?.text);
+        return {
+          entryId: r.entryId,
+          company: r.orgName,
+          roleTitle: r.jobTitle,
+          compLabel: r.compRange ? formatCompRange(r.compRange) : 'comp disclosed',
+          status: r.status,
+          kind: r.kind,
+          revealConsent: r.revealConsent,
+          timelineDone: entryTimeline(r.status).done,
+          asyncQuestion: question
+            ? { id: r.entryId, text: question, answered }
+            : null,
+        };
+      }),
     };
   }),
 
@@ -994,18 +1089,19 @@ export const studentRouter = router({
     .mutation(async ({ ctx, input }) => {
       const studentId = ctx.principal.studentId;
       const owned = await ctx.db
-        .select({ id: shortlistEntries.id })
+        .select({ id: shortlistEntries.id, asyncAnswer: shortlistEntries.asyncAnswer })
         .from(shortlistEntries)
         .where(and(eq(shortlistEntries.id, input.entryId), eq(shortlistEntries.studentId, studentId)))
         .limit(1);
       if (!owned[0]) throw new TRPCError({ code: 'FORBIDDEN', message: 'not your match' });
       // Persist the answer onto the entry so it surfaces in the sponsor dossier
       // (audio streams via /api/stream/answer/:entryId; never a durable URL).
+      // Preserve the recruiter's real question that was posed on the entry.
       await ctx.db
         .update(shortlistEntries)
         .set({
           asyncAnswer: {
-            question: ASYNC_QUESTION_TEXT,
+            question: owned[0].asyncAnswer?.question,
             audioKey: input.audioKey ?? null,
             text: input.text ?? null,
             answeredAt: new Date().toISOString(),

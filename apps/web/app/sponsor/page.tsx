@@ -7,6 +7,7 @@
 // (verbatim design copy). See the report note on that type gap.
 
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import Link from 'next/link';
 import type { JobStatus, RoleRow } from '@tartan/types';
 import { trpc } from '@/lib/trpc/client';
@@ -14,26 +15,6 @@ import { MonoText } from '@/components/ui';
 import { BrandGlyph } from '@/components/ui';
 import { useConcierge } from './_components/ConciergeSheet';
 import styles from './_components/dashboard.module.css';
-
-// Design copy the RoleRow type cannot carry (unique per seeded status).
-const ROLE_META: Record<string, { meta: string; statusLine: string }> = {
-  delivered: {
-    meta: 'Posted Jun 26 · storage replication team',
-    statusLine: 'Shortlist ready · 10 candidates, 1 wildcard',
-  },
-  matching: {
-    meta: 'Posted Jun 30 · confirmed yesterday',
-    statusLine: 'Recruiter matching · longlist of 27 in deep evaluation',
-  },
-  confirmed: {
-    meta: 'Confirmed · matching underway',
-    statusLine: 'Recruiter matching · deep evaluation in progress',
-  },
-  intake: {
-    meta: 'Draft · one intake question open',
-    statusLine: 'Concierge is waiting on your calibration answer',
-  },
-};
 
 const SLA_TONE: Record<
   RoleRow['slaTone'],
@@ -44,12 +25,50 @@ const SLA_TONE: Record<
   gray: { bg: '#f0f4f8', fg: '#5f6f7f' },
 };
 
+// Honest per-status description lines (the RoleRow type carries status + SLA but
+// not a meta/status sentence). No fabricated dates or counts.
 function metaFor(status: JobStatus): { meta: string; statusLine: string } {
-  return ROLE_META[status] ?? { meta: '', statusLine: '' };
+  switch (status) {
+    case 'delivered':
+      return { meta: 'Shortlist delivered', statusLine: 'Shortlist ready to review' };
+    case 'matching':
+    case 'confirmed':
+      return {
+        meta: 'Confirmed · matching underway',
+        statusLine: 'The Recruiter is matching now',
+      };
+    case 'intake':
+      return {
+        meta: 'Draft',
+        statusLine: 'Intake open · confirm to start the 72h clock',
+      };
+    case 'closed':
+      return { meta: 'Closed', statusLine: 'Role closed' };
+    default:
+      return { meta: '', statusLine: '' };
+  }
+}
+
+// Honest subtitle built from the real role states.
+function subtitleFor(roles: RoleRow[]): string {
+  const delivered = roles.filter((r) => r.status === 'delivered').length;
+  const matching = roles.filter(
+    (r) => r.status === 'matching' || r.status === 'confirmed',
+  ).length;
+  const intake = roles.filter((r) => r.status === 'intake').length;
+  const parts: string[] = [];
+  if (delivered)
+    parts.push(`${delivered} shortlist${delivered === 1 ? '' : 's'} ready`);
+  if (matching) parts.push(`${matching} role${matching === 1 ? '' : 's'} matching`);
+  if (intake) parts.push(`${intake} intake${intake === 1 ? '' : 's'} open`);
+  return parts.length
+    ? parts.join(' · ')
+    : `${roles.length} role${roles.length === 1 ? '' : 's'} in flight`;
 }
 
 export default function SponsorDashboard() {
   const router = useRouter();
+  const { data: session } = useSession();
   const concierge = useConcierge();
   const dashboard = trpc.sponsor.dashboard.useQuery();
   const createJob = trpc.sponsor.createJob.useMutation();
@@ -67,14 +86,21 @@ export default function SponsorDashboard() {
   }
   const d = dashboard.data;
 
+  const firstName = session?.user?.name?.split(' ')[0] ?? null;
+  const hour = new Date().getHours();
+  const partOfDay = hour < 12 ? 'Morning' : hour < 18 ? 'Afternoon' : 'Evening';
+  const greeting = firstName ? `${partOfDay}, ${firstName}` : partOfDay;
+  const hasRoles = d.roles.length > 0;
+
   return (
     <div className={styles.wrap}>
       <div className={styles.headerRow}>
         <div className={styles.headerCol}>
-          <h1 className={styles.greeting}>Morning, Jordan</h1>
+          <h1 className={styles.greeting}>{greeting}</h1>
           <p className={styles.subtitle}>
-            Tuesday, July 1 · one shortlist waiting on you, one role matching, one
-            intake open
+            {hasRoles
+              ? subtitleFor(d.roles)
+              : 'No roles yet. Start one to get a shortlist.'}
           </p>
         </div>
         <button
@@ -102,6 +128,23 @@ export default function SponsorDashboard() {
             shortlist SLA: 72 hours from confirm
           </span>
         </div>
+        {!hasRoles && (
+          <div className={styles.roleRow}>
+            <div className={styles.roleNameCol}>
+              <span className={styles.roleName}>No roles yet</span>
+              <span className={styles.roleMeta}>
+                Start one to get a shortlist.
+              </span>
+            </div>
+            <button
+              className={styles.roleAction}
+              onClick={postRole}
+              disabled={createJob.isPending}
+            >
+              Post a role
+            </button>
+          </div>
+        )}
         {d.roles.map((r) => {
           const m = metaFor(r.status);
           const tone = SLA_TONE[r.slaTone];

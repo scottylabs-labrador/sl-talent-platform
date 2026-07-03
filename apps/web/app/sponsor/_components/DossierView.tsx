@@ -1,11 +1,11 @@
 'use client';
 
-// DossierView — the 880px modal with the 12px vertical tartan spine. For a
-// candidate with audio (June, rank 1) it shows four pill tabs (Summary /
-// Evidence / Screen / Logistics); others render the rationale + scope note. The
-// competency matrix links each rating to its minute of evidence; clicking a
-// timestamp jumps to the Screen tab and cues that clip. Opening a dossier writes
-// a 'view' ledger event server-side (in sponsor.dossier).
+// DossierView — the 880px modal with the 12px vertical tartan spine. Every
+// candidate shows the four pill tabs (Summary / Evidence / Screen / Logistics)
+// built from their own real rows. The competency matrix links each rating to
+// its minute of evidence; clicking a timestamp jumps to the Screen tab and cues
+// that clip. Opening a dossier writes a 'view' ledger event server-side (in
+// sponsor.dossier).
 
 import { useEffect, useRef, useState } from 'react';
 import { MessageSquare, X } from 'lucide-react';
@@ -38,7 +38,6 @@ export function DossierView({
   }, [onClose]);
 
   const d = q.data;
-  const isFull = Boolean(d && !d.scopeNote);
 
   const jumpTo = (momentId: string) => {
     setTab('screen');
@@ -57,7 +56,7 @@ export function DossierView({
   const metaLine = d
     ? `${d.student.program ?? d.student.kind}${
         d.student.gradDate ? ` · ${formatMonthYear(d.student.gradDate)}` : ''
-      } · rank ${d.rank} of 10 · fit ${d.fit}`
+      } · rank ${d.rank} · fit ${d.fit}`
     : '';
 
   return (
@@ -95,47 +94,31 @@ export function DossierView({
                 </button>
               </div>
 
-              {isFull ? (
-                <>
-                  <div className={styles.tabs}>
-                    {(['summary', 'evidence', 'screen', 'logistics'] as Tab[]).map(
-                      (t) => (
-                        <button
-                          key={t}
-                          className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
-                          onClick={() => setTab(t)}
-                        >
-                          {t[0]!.toUpperCase() + t.slice(1)}
-                        </button>
-                      ),
-                    )}
-                  </div>
+              <div className={styles.tabs}>
+                {(['summary', 'evidence', 'screen', 'logistics'] as Tab[]).map(
+                  (t) => (
+                    <button
+                      key={t}
+                      className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`}
+                      onClick={() => setTab(t)}
+                    >
+                      {t[0]!.toUpperCase() + t.slice(1)}
+                    </button>
+                  ),
+                )}
+              </div>
 
-                  <div className={styles.tabContent}>
-                    {tab === 'summary' && (
-                      <SummaryTab d={d} onJump={jumpTo} />
-                    )}
-                    {tab === 'evidence' && <EvidenceTab d={d} />}
-                    {tab === 'screen' &&
-                      (d.clips.length ? (
-                        <AudioPlayer clips={d.clips} focusClip={focusClip} />
-                      ) : (
-                        <p className={styles.plain}>No screen clips available.</p>
-                      ))}
-                    {tab === 'logistics' && <LogisticsTab d={d} />}
-                  </div>
-                </>
-              ) : (
-                <div className={styles.scopeWrap}>
-                  <div className={styles.rationalePanel}>
-                    <span className={styles.rationaleEyebrow}>
-                      The Recruiter&apos;s rationale
-                    </span>
-                    <span className={styles.rationaleBody}>{d.rationale}</span>
-                  </div>
-                  <div className={styles.scopeNote}>{d.scopeNote}</div>
-                </div>
-              )}
+              <div className={styles.tabContent}>
+                {tab === 'summary' && <SummaryTab d={d} onJump={jumpTo} />}
+                {tab === 'evidence' && <EvidenceTab d={d} />}
+                {tab === 'screen' &&
+                  (d.clips.length ? (
+                    <AudioPlayer clips={d.clips} focusClip={focusClip} />
+                  ) : (
+                    <p className={styles.plain}>No screen clips available.</p>
+                  ))}
+                {tab === 'logistics' && <LogisticsTab d={d} />}
+              </div>
             </>
           )}
         </div>

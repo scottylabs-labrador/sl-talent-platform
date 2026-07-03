@@ -10,6 +10,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { Check, Clock } from 'lucide-react';
 import type { CompRange, JobRequirements, RequirementRow } from '@tartan/types';
 import { trpc } from '@/lib/trpc/client';
@@ -25,6 +26,7 @@ interface Msg {
 export default function RoleIntake() {
   const { jobId } = useParams<{ jobId: string }>();
   const { toast } = useToast();
+  const { data: session } = useSession();
 
   const jobQ = trpc.sponsor.job.useQuery({ jobId });
   const intakeM = trpc.sponsor.intakeMessage.useMutation();
@@ -41,6 +43,14 @@ export default function RoleIntake() {
   const seeded = useRef(false);
 
   const title = jobQ.data?.title ?? 'Role intake';
+  // Author label for the sponsor's turns, from the real member + org (never a
+  // demo name). Falls back to a neutral label until the session/job load.
+  const firstName = session?.user?.name?.split(' ')[0] ?? null;
+  const orgName = jobQ.data?.orgName ?? null;
+  const meLabel =
+    firstName && orgName
+      ? `${firstName} @ ${orgName}`
+      : firstName ?? 'You';
 
   // Seed the thread + summary once the job loads.
   useEffect(() => {
@@ -82,9 +92,10 @@ export default function RoleIntake() {
     const res = await confirmM.mutateAsync({ jobId, requirements, compRange });
     setConfirmed(true);
     setSlaDueAt(res.slaDueAt);
-    toast('Confirmed. Shortlist due Friday 4:12 PM. The Recruiter starts now.', {
-      durationMs: 3000,
-    });
+    toast(
+      `Confirmed. Shortlist due ${formatDayTime(res.slaDueAt)}. The Recruiter starts now.`,
+      { durationMs: 3000 },
+    );
   };
 
   const dueLabel = slaDueAt
@@ -117,7 +128,7 @@ export default function RoleIntake() {
                 }`}
               >
                 <span className={styles.who}>
-                  {m.who === 'me' ? 'Jordan @ Scogle' : 'Concierge'}
+                  {m.who === 'me' ? meLabel : 'Concierge'}
                 </span>
                 <div
                   className={`${styles.bubble} ${

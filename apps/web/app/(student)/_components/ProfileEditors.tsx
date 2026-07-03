@@ -271,7 +271,7 @@ export function StoryForm({
       }}
     >
       <label style={FIELD_LABEL}>Title</label>
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Meridian internship" style={FIELD_INPUT} />
+      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. summer internship" style={FIELD_INPUT} />
 
       <label style={FIELD_LABEL}>Setup</label>
       <textarea value={situation} onChange={(e) => setSituation(e.target.value)} placeholder="What was the situation?" style={TEXTAREA} />

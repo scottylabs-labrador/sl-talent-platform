@@ -75,7 +75,7 @@ export function MatchesScreen() {
       }
     }
     setRecState('sent');
-    toast('Reply sent to the Recruiter. Scogle sees it with your shortlist card.', { durationMs: 2600 });
+    toast(`Reply sent. ${match?.company ?? 'The recruiter'} sees it with your shortlist card.`, { durationMs: 2600 });
   };
 
   const startRec = async (entryId: string) => {
@@ -129,11 +129,11 @@ export function MatchesScreen() {
               <Avatar size={32} radius={8} fontSize={13} company>{match.company[0]}</Avatar>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{match.roleTitle}</div>
-                <div style={{ fontSize: 11.5, color: '#5f6f7f' }}>{match.company} · Pittsburgh or Kirkland</div>
+                <div style={{ fontSize: 11.5, color: '#5f6f7f' }}>{match.company}</div>
               </div>
               <span style={{ fontSize: 10.5, fontWeight: 600, color: '#0d4b17', background: '#dcefe0', borderRadius: 4, padding: '3px 8px' }}>Shortlisted</span>
             </div>
-            <div style={{ fontSize: 12, color: '#4a5662' }}>{match.compLabel} · Summer 2027 · CPT friendly · comp disclosed per platform policy</div>
+            <div style={{ fontSize: 12, color: '#4a5662' }}>{match.compLabel}</div>
             <StepTimeline done={match.timelineDone} />
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: '#5f6f7f' }}>
               {STEP_LABELS.map((l) => <span key={l}>{l}</span>)}
@@ -202,6 +202,15 @@ export function MatchesScreen() {
             </div>
           )}
         </>
+      )}
+
+      {!match && (
+        <div style={{ background: '#fff', borderRadius: 12, padding: '22px 20px', display: 'flex', flexDirection: 'column', gap: 6, boxShadow: 'var(--shadow-resting)' }}>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>You have not been shortlisted yet.</div>
+          <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#5f6f7f' }}>
+            When a recruiter shortlists you for a role, it shows up here with the timeline and any follow-up they ask.
+          </div>
+        </div>
       )}
 
       <div style={{ height: 76 }} />

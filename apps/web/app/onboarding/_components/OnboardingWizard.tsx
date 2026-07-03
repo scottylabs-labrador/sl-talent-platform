@@ -810,25 +810,25 @@ export function OnboardingWizard({ initialStep }: { initialStep: OnboardingStep 
                       className={s.input}
                       value={stTitle}
                       onChange={(e) => setStTitle(e.target.value)}
-                      placeholder="Title, e.g. Cut checkout latency at Meridian"
+                      placeholder="Title, e.g. Cut checkout latency by 40%"
                     />
                     <textarea
                       className={s.textarea}
                       value={stSituation}
                       onChange={(e) => setStSituation(e.target.value)}
-                      placeholder="Situation — what was the context?"
+                      placeholder="Situation, what was the context?"
                     />
                     <textarea
                       className={s.textarea}
                       value={stContribution}
                       onChange={(e) => setStContribution(e.target.value)}
-                      placeholder="Contribution — what did you personally do?"
+                      placeholder="Contribution, what did you personally do?"
                     />
                     <textarea
                       className={s.textarea}
                       value={stOutcome}
                       onChange={(e) => setStOutcome(e.target.value)}
-                      placeholder="Outcome — a measured result (optional but strongest)"
+                      placeholder="Outcome, a measured result (optional but strongest)"
                     />
                     <div className={s.row2}>
                       <Pill

@@ -49,7 +49,6 @@ import {
 import { TRPCError } from '@trpc/server';
 import {
   and,
-  config,
   db as getDb,
   dossiers as dossiersTable,
   eq,
@@ -77,29 +76,30 @@ const LICENSE = 'Premier: internal recruiting use only';
 const REFUSED_ROW_VALUE =
   'Filters that proxy protected classes are declined at intake, by policy';
 const SLA_HOURS = 72;
-// The demo narrative's one async follow-up (mirrors student.ts). Shown on the
-// SWE Intern shortlist so the Summary tab's Follow-up block has a question even
-// before the student answers. There is no async_questions table; the answer,
-// once given, is persisted on shortlist_entries.async_answer.
-const ASYNC_QUESTION_TEXT =
-  'RailTrace buffered bursty writes for one rail line. What breaks first if Scogle pointed 40,000 fleet units at it, and what would you change?';
-const SCOPE_NOTE =
-  'This prototype builds the complete dossier for June Park, rank 1. Open hers for the full Summary, Evidence, Screen and Logistics experience; every candidate gets the same structure in production.';
 
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-async function readConfig<T>(key: string): Promise<T | null> {
-  const rows = await getDb()
-    .select({ value: config.value })
-    .from(config)
-    .where(eq(config.key, key))
-    .limit(1);
-  return (rows[0]?.value as T | undefined) ?? null;
-}
-
 // visibleStudents lives in @/lib/visibility — shared with the audio stream
 // route so both enforce the same single visibility authority.
+
+/**
+ * Count published screens for a set of students — the real "screened" number
+ * behind a delivered shortlist. Returns 0 when the set is empty.
+ */
+async function countPublishedScreens(studentIds: string[]): Promise<number> {
+  if (!studentIds.length) return 0;
+  const rows = await getDb()
+    .select({ id: screens.id })
+    .from(screens)
+    .where(
+      and(
+        inArray(screens.studentId, studentIds),
+        eq(screens.status, 'published'),
+      ),
+    );
+  return rows.length;
+}
 
 /** The sticky requirements summary rows, derived from jobs.requirements. */
 function buildSummaryRows(
@@ -229,9 +229,10 @@ async function buildConciergeDigest(orgId: string): Promise<string> {
     .innerJoin(jobs, eq(jobs.id, shortlists.jobId))
     .where(and(eq(jobs.orgId, orgId), eq(shortlists.status, 'delivered')));
 
-  const funnelBlob = await readConfig<{ funnel?: ShortlistFunnel }>(
-    'sponsor.scogle_dashboard',
-  );
+  if (deliveredRows.length === 0) {
+    lines.push('');
+    lines.push('No delivered shortlists yet.');
+  }
 
   for (const sl of deliveredRows) {
     const entries = await db
@@ -252,14 +253,17 @@ async function buildConciergeDigest(orgId: string): Promise<string> {
       const parts = [`rank ${e.rank}: ${name}`, `fit ${e.fit}`];
       if (e.kind !== 'fit') parts.push(e.kind);
       if (e.status !== 'none') parts.push(`status ${e.status}`);
-      lines.push(`- ${parts.join(', ')}${chips ? ` — ${chips}` : ''}`);
+      lines.push(`- ${parts.join(', ')}${chips ? `. ${chips}` : ''}`);
     }
+    // Funnel is computed from real rows: screened = published screens for the
+    // shortlisted students, deep-evaluated = entries on the slate, answered =
+    // entries with a recorded async answer. Any stage with no data reads 0.
     const answered = entries.filter((e) => e.asyncAnswer != null).length;
-    const f = funnelBlob?.funnel;
+    const screened = await countPublishedScreens([
+      ...new Set(entries.map((e) => e.studentId)),
+    ]);
     lines.push(
-      `Funnel: ${f?.screened ?? 62} screened, ${f?.deepEvaluated ?? 27} deep-evaluated, ${
-        answered > 0 ? answered : (f?.answeredFollowup ?? 9)
-      } answered the recruiter follow-up.`,
+      `Funnel: ${screened} screened, ${entries.length} deep-evaluated, ${answered} answered the recruiter follow-up.`,
     );
   }
   return lines.join('\n');
@@ -346,7 +350,7 @@ export const sponsorRouter = router({
 
     const now = Date.now();
 
-    // ── Live stats (each tile falls back to the seeded blob only with no data) ──
+    // ── Live stats (each tile computes from real rows; honest zero otherwise) ──
     const deliveredShortlistIds = shortlistRows
       .filter((s) => s.status === 'delivered')
       .map((s) => s.id);
@@ -363,22 +367,11 @@ export const sponsorRouter = router({
         .where(inArray(shortlistEntries.shortlistId, deliveredShortlistIds));
       introCount = entryRows.filter((e) => e.status === 'intro').length;
       const studentIds = [...new Set(entryRows.map((e) => e.studentId))];
-      if (studentIds.length) {
-        const pubScreens = await getDb()
-          .select({ id: screens.id })
-          .from(screens)
-          .where(
-            and(
-              inArray(screens.studentId, studentIds),
-              eq(screens.status, 'published'),
-            ),
-          );
-        screenedCount = pubScreens.length;
-      }
+      screenedCount = await countPublishedScreens(studentIds);
     }
 
     // Time to first shortlist: confirmedAt → delivery of the earliest delivered
-    // role, in hours (SLA is 72h). Falls back to the seeded value if unknown.
+    // role, in hours (SLA is 72h). Null until a shortlist has been delivered.
     let ttfsLabel: string | null = null;
     for (const j of jobRows) {
       const sl = deliveredByJob.get(j.id);
@@ -414,7 +407,7 @@ export const sponsorRouter = router({
                   ),
                 )
               : null;
-          slaLabel = deliveredHrs ? `Delivered in ${deliveredHrs}h` : 'Delivered in 41h';
+          slaLabel = deliveredHrs ? `Delivered in ${deliveredHrs}h` : 'Delivered';
           action = shortlistId
             ? { label: 'Review shortlist', href: `/sponsor/shortlist/${shortlistId}` }
             : null;
@@ -441,27 +434,21 @@ export const sponsorRouter = router({
         };
       });
 
-    // Concierge chips + the seeded stat blob (used only as a per-tile fallback
-    // for numbers with no live data source). Labels stay design-verbatim.
-    const blob = await readConfig<{
-      stats?: { n: string; label: string }[];
-      conciergeChips?: string[];
-    }>('sponsor.scogle_dashboard');
-    const seededStat = (i: number): string | null => blob?.stats?.[i]?.n ?? null;
-
+    // Stat tiles — every value computes from real rows; an empty stage shows an
+    // honest zero (or a dash where a duration has no meaning yet). Labels stay
+    // design-verbatim.
     const stats: StatTile[] = [
       {
         label: 'candidates screened for your roles',
-        value: screenedCount > 0 ? String(screenedCount) : (seededStat(0) ?? '62'),
+        value: String(screenedCount),
       },
       {
         label: 'time to first shortlist, SLA 72h',
-        value: ttfsLabel ?? (seededStat(1) ?? '41h'),
+        value: ttfsLabel ?? 'pending',
       },
       {
-        label: 'intros accepted on role 1 so far',
-        value:
-          introCount > 0 ? `${introCount} / 10` : (seededStat(2) ?? '4 / 10'),
+        label: 'intros requested so far',
+        value: String(introCount),
       },
       {
         label: 'role slots used this year',
@@ -469,10 +456,12 @@ export const sponsorRouter = router({
       },
     ];
 
-    const conciergeSuggestions = blob?.conciergeChips ?? [
-      'How many ML systems students graduate in May?',
-      'Rerun role 1, weight Go higher',
+    // Generic starter prompts (no fabricated role or candidate specifics). The
+    // Concierge answers each from the licensed-scope digest of real rows.
+    const conciergeSuggestions = [
+      'How many students graduate in May?',
       'Which shortlisted candidates are alumni?',
+      'What is trainable for my role versus a hard filter?',
     ];
 
     return {
@@ -498,6 +487,11 @@ export const sponsorRouter = router({
         .where(and(eq(jobs.id, input.jobId), eq(jobs.orgId, ctx.principal.orgId)))
         .limit(1);
       if (!j) throw new TRPCError({ code: 'NOT_FOUND', message: 'job' });
+      const [org] = await getDb()
+        .select({ name: sponsorOrgs.name })
+        .from(sponsorOrgs)
+        .where(eq(sponsorOrgs.id, ctx.principal.orgId))
+        .limit(1);
       const req = j.requirements ?? null;
       const compRange = j.compRange && j.compRange.max > 0 ? j.compRange : null;
       const summaryRows = buildSummaryRows(
@@ -511,6 +505,7 @@ export const sponsorRouter = router({
         jobId: j.id,
         title: j.title,
         status: j.status,
+        orgName: org?.name ?? null,
         requirements: req,
         compRange,
         summaryRows,
@@ -810,26 +805,36 @@ export const sponsorRouter = router({
         }
       }
 
-      const funnelBlob = await readConfig<{
-        funnel?: ShortlistFunnel;
-      }>('sponsor.scogle_dashboard');
-      const seededFunnel = funnelBlob?.funnel ?? {
-        screened: 62,
-        deepEvaluated: 27,
-        answeredFollowup: 9,
-      };
-      // 'answered your follow-up' is real: entries the student has answered
-      // (async_answer set). Fall back to the seeded pool note only when zero.
+      // Funnel is 100% real: screened = published screens for the shortlisted
+      // students, deep-evaluated = entries on this slate, answered = entries
+      // with a recorded async answer. Any stage with no data reads 0.
+      const screened = await countPublishedScreens([
+        ...new Set(entries.map((e) => e.studentId)),
+      ]);
       const answeredFollowupCount = entries.filter(
         (e) => e.asyncAnswer != null,
       ).length;
       const funnel: ShortlistFunnel = {
-        ...seededFunnel,
-        answeredFollowup:
-          answeredFollowupCount > 0
-            ? answeredFollowupCount
-            : seededFunnel.answeredFollowup,
+        screened,
+        deepEvaluated: entries.length,
+        answeredFollowup: answeredFollowupCount,
       };
+
+      // Real delivery time: confirmedAt → shortlist delivery, in hours.
+      const deliveredHrs =
+        sl.job.confirmedAt
+          ? Math.max(
+              1,
+              Math.round(
+                (sl.shortlist.updatedAt.getTime() -
+                  sl.job.confirmedAt.getTime()) /
+                  3_600_000,
+              ),
+            )
+          : null;
+      const slaEyebrow = deliveredHrs
+        ? `Shortlist · delivered in ${deliveredHrs}h of the 72h SLA`
+        : 'Shortlist · delivered';
 
       const shortfallNote =
         candidates.length < 10
@@ -841,7 +846,7 @@ export const sponsorRouter = router({
         jobId: sl.job.id,
         jobTitle: sl.job.title,
         status: sl.shortlist.status,
-        slaEyebrow: 'Shortlist · delivered in 41h of the 72h SLA',
+        slaEyebrow,
         funnel,
         candidates,
         shortfallNote,
@@ -1039,19 +1044,22 @@ export const sponsorRouter = router({
         ssoVerified: true,
       };
 
-      // Async follow-up: the recruiter's question + the student's answer, if
-      // any. The question shows even before an answer (Awaiting reply); once
-      // answered, the audio streams via /api/stream/answer/:entryId (never a
-      // durable URL) or the typed text renders inline.
+      // Async follow-up: the recruiter's question + the student's recorded
+      // answer. There is no async_questions table, so a follow-up exists only
+      // once the student has answered (the question is persisted alongside the
+      // answer on shortlist_entries.async_answer). Once answered, the audio
+      // streams via /api/stream/answer/:entryId (never a durable URL) or the
+      // typed text renders inline.
       const answer = entry.asyncAnswer ?? null;
-      const hasFollowUp = answer !== null || job.title.startsWith('SWE Intern');
-      const followUp: AsyncFollowUp | null = hasFollowUp
+      const followUp: AsyncFollowUp | null = answer
         ? {
-            question: answer?.question ?? ASYNC_QUESTION_TEXT,
-            answered: answer !== null,
-            answeredAt: answer?.answeredAt ?? null,
-            text: answer?.text ?? null,
-            audio: answer?.audioKey
+            // The recruiter's question is persisted alongside the answer; when
+            // absent, label it plainly rather than inventing one.
+            question: answer.question ?? 'Recruiter follow-up',
+            answered: true,
+            answeredAt: answer.answeredAt ?? null,
+            text: answer.text ?? null,
+            audio: answer.audioKey
               ? {
                   streamPath: `/api/stream/answer/${entry.id}`,
                   tag: 'Recorded answer to your follow-up',
@@ -1059,10 +1067,6 @@ export const sponsorRouter = router({
               : null,
           }
         : null;
-
-      // Full player experience only where audio clips exist (June, rank 1);
-      // others render the scope note (production supplies full for all).
-      const hasFull = clips.length > 0;
 
       // Every dossier open writes a 'view' ledger event.
       await writeLedgerEvent({
@@ -1091,7 +1095,7 @@ export const sponsorRouter = router({
           contribution: s.contribution,
           outcome: s.outcome,
           // experience_stories has no provenance column; a still-open outcome is
-          // the Verifier's "pending" signal (matches the design's Meridian card).
+          // the Verifier's "pending" signal.
           provenance: (s.outcome === null ? 'pending' : 'verified') as
             | 'pending'
             | 'verified',
@@ -1105,7 +1109,9 @@ export const sponsorRouter = router({
               note: v.work_auth.note,
             }
           : { status: 'other', needsSponsorship: false },
-        scopeNote: hasFull ? null : SCOPE_NOTE,
+        // Every real candidate renders the full Summary/Evidence/Screen/
+        // Logistics structure from their own rows; there is no scope note.
+        scopeNote: null,
       };
     }),
 

@@ -3,6 +3,7 @@
 // and wraps every sponsor route in <SponsorChrome>. The main pane swaps by route
 // (dashboard / intake / shortlist); the chrome never re-renders across them.
 
+import { SessionProvider } from 'next-auth/react';
 import { requireSession } from '@/auth';
 import { getServerApi } from '@/lib/trpc/server';
 import { SponsorChrome } from './_components/SponsorChrome';
@@ -13,14 +14,19 @@ export default async function SponsorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireSession('sponsor');
+  // The session carries the real logged-in identity; SessionProvider makes it
+  // available to the client chrome (greeting, author labels, avatar) so nothing
+  // is hardcoded to a demo name.
+  const session = await requireSession('sponsor');
   const api = await getServerApi();
   const { org, nav } = await api.sponsor.chrome();
   return (
-    <ConciergeProvider>
-      <SponsorChrome org={org} nav={nav}>
-        {children}
-      </SponsorChrome>
-    </ConciergeProvider>
+    <SessionProvider session={session}>
+      <ConciergeProvider orgName={org.name}>
+        <SponsorChrome org={org} nav={nav}>
+          {children}
+        </SponsorChrome>
+      </ConciergeProvider>
+    </SessionProvider>
   );
 }

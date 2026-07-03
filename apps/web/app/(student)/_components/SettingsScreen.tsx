@@ -11,7 +11,7 @@ import { ledgerChip, ledgerWhen } from './format';
 const ROOT: React.CSSProperties = { padding: '64px 20px 24px', display: 'flex', flexDirection: 'column', gap: 14 };
 
 const VIS_OPTIONS: { id: Visibility; label: string; display: string; desc: string }[] = [
-  { id: 'searchable', label: 'Searchable', display: 'searchable', desc: 'All 10 Premier sponsors can find you. Every view is logged here.' },
+  { id: 'searchable', label: 'Searchable', display: 'searchable', desc: 'All Premier sponsors can find you. Every view is logged here.' },
   { id: 'match_only', label: 'Match only', display: 'match-only', desc: 'Invisible until shortlisted, then we ask you before revealing identity.' },
   { id: 'paused', label: 'Paused', display: 'paused', desc: 'Nothing new is shown to anyone. Existing intros stay open.' },
 ];

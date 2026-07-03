@@ -48,10 +48,8 @@ function monthYearOf(iso: string | null): string {
   if (!iso) return '';
   return new Date(iso).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 }
-function outcomePrompt(title: string): string {
-  return /meridian/i.test(title)
-    ? 'Add a measured outcome. What happened to the drop rate?'
-    : 'Add a measured outcome to complete this story.';
+function outcomePrompt(_title: string): string {
+  return 'Add a measured outcome to complete this story.';
 }
 
 export function ProfileScreen() {
@@ -574,7 +572,7 @@ export function ProfileScreen() {
             </select>
 
             <label style={FIELD_LABEL} htmlFor="ev-title">Title</label>
-            <input id="ev-title" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} placeholder="e.g. railtrace repo, 14 commits" style={FIELD_INPUT} />
+            <input id="ev-title" value={evTitle} onChange={(e) => setEvTitle(e.target.value)} placeholder="e.g. github repo, 14 commits" style={FIELD_INPUT} />
 
             <label style={FIELD_LABEL} htmlFor="ev-url">Link (optional)</label>
             <input id="ev-url" value={evUrl} onChange={(e) => setEvUrl(e.target.value)} placeholder="https://" inputMode="url" style={FIELD_INPUT} />
@@ -704,9 +702,18 @@ export function ProfileScreen() {
     score: c.score,
     link: c.momentId && c.timestampMs != null ? `moment ${clockLabel(c.timestampMs)}` : 'full transcript',
   }));
-  const sponsorMeta = [school, degree, monthYearOf(identity.gradDate), (logisticsChips.find((c) => c.label === 'locations')?.value ?? ''), 'F-1, CPT eligible']
+  const sponsorMeta = [
+    school,
+    degree,
+    monthYearOf(identity.gradDate),
+    logisticsChips.find((c) => c.label === 'locations')?.value ?? '',
+    logisticsChips.find((c) => c.label === 'work-auth')?.value ?? '',
+  ]
     .filter(Boolean)
     .join(' · ');
+  const sponsorSubLine = data.lastVerifiedAt
+    ? `Profile verified ${monthYearOf(data.lastVerifiedAt)}`
+    : 'Profile not yet verified';
 
   return (
     <>
@@ -715,9 +722,9 @@ export function ProfileScreen() {
         <div style={{ position: 'fixed', top: 44, left: 'calc(50% + 215px)', zIndex: 20 }}>
           <SponsorPanel
             name={identity.name}
-            andrewId={identity.andrewId ?? 'junepark'}
+            andrewId={identity.andrewId ?? ''}
             metaLine={sponsorMeta}
-            subLine="Profile refreshed 3 days ago · screen completed Jul 1"
+            subLine={sponsorSubLine}
             skills={talentGraph.map((s) => ({ skillId: s.skillId, name: s.name, verified: s.verified, count: s.evidenceIds.length }))}
             expandedSkillId={selected}
             competency={sponsorCompetency}

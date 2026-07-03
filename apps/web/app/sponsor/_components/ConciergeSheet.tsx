@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useSession } from 'next-auth/react';
 import { X } from 'lucide-react';
 import { trpc } from '@/lib/trpc/client';
 import { BrandGlyph } from '@/components/ui';
@@ -33,11 +34,12 @@ export function useConcierge(): ConciergeCtx {
   return c;
 }
 
-// The dashboard card's three suggestion chips (design-verbatim), reused here.
+// Generic starter prompts (no fabricated role or candidate specifics). The
+// Concierge answers each from the licensed-scope digest of real rows.
 const SUGGESTIONS = [
-  'How many ML systems students graduate in May?',
-  'Rerun role 1, weight Go higher',
+  'How many students graduate in May?',
   'Which shortlisted candidates are alumni?',
+  'What is trainable for my role versus a hard filter?',
 ];
 
 interface Bubble {
@@ -45,11 +47,23 @@ interface Bubble {
   content: string;
 }
 
-export function ConciergeProvider({ children }: { children: ReactNode }) {
+export function ConciergeProvider({
+  orgName,
+  children,
+}: {
+  orgName?: string;
+  children: ReactNode;
+}) {
+  const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
   const concierge = trpc.sponsor.conciergeMessage.useMutation();
+
+  // Author label for the member's turns, from the real member + org.
+  const firstName = session?.user?.name?.split(' ')[0] ?? null;
+  const meLabel =
+    firstName && orgName ? `${firstName} @ ${orgName}` : firstName ?? 'You';
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
@@ -161,7 +175,7 @@ export function ConciergeProvider({ children }: { children: ReactNode }) {
                   }`}
                 >
                   <span className={styles.who}>
-                    {m.role === 'user' ? 'Jordan @ Scogle' : 'Concierge'}
+                    {m.role === 'user' ? meLabel : 'Concierge'}
                   </span>
                   <div
                     className={`${styles.bubble} ${

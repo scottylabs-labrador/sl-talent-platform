@@ -33,7 +33,9 @@ export function HomeScreen() {
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em' }}>
             Hey, {student.name.split(' ')[0]}
           </div>
-          <div style={{ fontSize: 12.5, color: '#5f6f7f' }}>ScottyLabs Talent · profile live</div>
+          <div style={{ fontSize: 12.5, color: '#5f6f7f' }}>
+            ScottyLabs Talent · {published ? 'profile live' : 'profile taking shape'}
+          </div>
         </div>
         <Link href="/hub" aria-label="Hub" title="Hub" style={{ textDecoration: 'none' }}>
           <Avatar size={40} fontSize={14}>{initials(student.name)}</Avatar>
@@ -48,7 +50,7 @@ export function HomeScreen() {
           </div>
           <div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>Your Screen Dossier is live</div>
-            <div style={{ fontSize: 12.5, color: '#5f6f7f' }}>Visible to 10 Premier sponsors under license</div>
+            <div style={{ fontSize: 12.5, color: '#5f6f7f' }}>Visible to Premier sponsors under license</div>
           </div>
         </div>
       ) : (
@@ -97,7 +99,7 @@ export function HomeScreen() {
         <Link href="/profile" className={styles.nudge} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', borderRadius: 8, border: '1px dashed #aebdcc', background: '#f8fafc', textDecoration: 'none' }}>
           <Plus size={15} strokeWidth={2} color="#0a6b94" style={{ flex: 'none', marginTop: 1 }} />
           <div style={{ fontSize: 12.5, lineHeight: 1.45, color: '#4a5662' }}>
-            <span style={{ fontWeight: 600, color: '#1e1e1e' }}>Do this next:</span> {strengthMeter.doNext} <span style={{ fontWeight: 600, color: '#0a6b94' }}>+4</span>
+            <span style={{ fontWeight: 600, color: '#1e1e1e' }}>Do this next:</span> {strengthMeter.doNext}
           </div>
         </Link>
       </div>
@@ -115,7 +117,7 @@ export function HomeScreen() {
             {liveMatch.stepLabels.map((l) => <span key={l}>{l}</span>)}
           </div>
           <TapFloorLink href="/matches" className={styles.btnGhost} visualHeight={40} style={{ fontSize: 13, fontWeight: 600 }}>
-            Answer Scogle&rsquo;s follow-up question
+            Open your {liveMatch.company} match
           </TapFloorLink>
         </div>
       )}

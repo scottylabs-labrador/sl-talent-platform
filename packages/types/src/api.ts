@@ -106,7 +106,7 @@ export type ExperienceStory = z.infer<typeof ExperienceStory>;
 export const LedgerEntry = z.object({
   id: z.string().uuid(),
   eventKind: z.string(), // ledger_events.kind, drives the chip tag
-  actorLabel: z.string(), // e.g. "Scogle, Inc" / "Talent Rep"
+  actorLabel: z.string(), // e.g. the sponsor org name / "Talent Rep"
   detail: LedgerDetail,
   license: z.string().nullable(),
   createdAt: z.string(), // ISO
@@ -509,7 +509,7 @@ export const ShortlistOutput = z.object({
   jobId: z.string().uuid(),
   jobTitle: z.string(),
   status: ShortlistStatus,
-  // "delivered in 41h of the 72h SLA"
+  // real delivery time computed from confirmedAt, e.g. "delivered in Nh of the 72h SLA"
   slaEyebrow: z.string(),
   funnel: ShortlistFunnel,
   candidates: z.array(CandidateCard),

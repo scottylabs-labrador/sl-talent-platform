@@ -51,12 +51,22 @@ export interface LedgerChip {
   fg: string;
 }
 
-/** Chip letters + colors, verbatim from student-app.md "Data Ledger". */
+/** A short chip code derived from the real actor label (org/person name), e.g.
+ * a two-word name -> its initials, "Jordan Lee" -> "JL". Falls back to "SP"
+ * (sponsor) when the label is empty. No hardcoded org initials. */
+function actorCode(actorLabel: string): string {
+  const words = actorLabel.trim().split(/\s+/).filter(Boolean);
+  if (words.length >= 2) return (words[0]![0]! + words[1]![0]!).toUpperCase();
+  const w = words[0] ?? '';
+  return w.slice(0, 2).toUpperCase() || 'SP';
+}
+
+/** Chip letters + colors, per student-app.md "Data Ledger". The sponsor-facing
+ * events (view, stream) derive their code from the real actor label. */
 export function ledgerChip(eventKind: string, actorLabel: string): LedgerChip {
-  const isScogle = /scogle/i.test(actorLabel);
   switch (eventKind) {
     case 'view':
-      return { code: 'SG', kindWord: 'View', bg: '#063f58', fg: '#fff' };
+      return { code: actorCode(actorLabel), kindWord: 'View', bg: '#063f58', fg: '#fff' };
     case 'verify':
       return { code: 'VF', kindWord: 'Verify', bg: '#e7f5fa', fg: '#0a6b94' };
     case 'shortlist':
@@ -65,7 +75,7 @@ export function ledgerChip(eventKind: string, actorLabel: string): LedgerChip {
     case 'export':
       return { code: 'EX', kindWord: 'Export', bg: '#f3ecd2', fg: '#654a00' };
     case 'stream':
-      return { code: isScogle ? 'SG' : 'ST', kindWord: 'Stream', bg: '#063f58', fg: '#fff' };
+      return { code: actorCode(actorLabel), kindWord: 'Stream', bg: '#063f58', fg: '#fff' };
     case 'edit':
     default:
       return { code: 'YOU', kindWord: 'Edit', bg: '#f0f4f8', fg: '#4a5662' };

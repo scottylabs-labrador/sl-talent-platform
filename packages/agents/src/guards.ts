@@ -135,7 +135,7 @@ export function validateIntakeRequirements(
     ['mustHaves', requirements.mustHaves],
     ['niceToHaves', requirements.niceToHaves],
     ['skills', requirements.skills],
-    ['locations', requirements.locations],
+    ['locations', requirements.locations ?? undefined],
   ];
   for (const [field, list] of listFields) {
     if (!list) continue;
@@ -143,9 +143,9 @@ export function validateIntakeRequirements(
   }
 
   const scalarFields: [string, string | undefined][] = [
-    ['team', requirements.team],
-    ['timeline', requirements.timeline],
-    ['other', requirements.other],
+    ['team', requirements.team ?? undefined],
+    ['timeline', requirements.timeline ?? undefined],
+    ['other', requirements.other ?? undefined],
   ];
   for (const [field, value] of scalarFields) {
     if (value) scanField(field, value, violations);

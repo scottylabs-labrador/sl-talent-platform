@@ -117,11 +117,14 @@ export const JobRequirements = z.object({
   mustHaves: z.array(z.string()),
   niceToHaves: z.array(z.string()),
   skills: z.array(z.string()),
-  team: z.string().optional(),
-  timeline: z.string().optional(),
-  locations: z.array(z.string()).optional(),
-  workModel: z.enum(['onsite', 'hybrid', 'remote']).optional(),
-  other: z.string().optional(),
+  // Optional leaves use .nullish(): under the provider's strict JSON-schema mode
+  // every optional renders as nullable, so the model returns `null` for anything
+  // the intake turn did not state; a plain .optional() would reject that null.
+  team: z.string().nullish(),
+  timeline: z.string().nullish(),
+  locations: z.array(z.string()).nullish(),
+  workModel: z.enum(['onsite', 'hybrid', 'remote']).nullish(),
+  other: z.string().nullish(),
 });
 export type JobRequirements = z.infer<typeof JobRequirements>;
 
@@ -144,7 +147,9 @@ export const CompRange = z.object({
   max: z.number().nonnegative(),
   period: z.enum(['hour', 'year']),
   currency: z.string().default('USD'),
-  equity: z.string().optional(),
+  // .nullish(): strict structured output renders this optional leaf as nullable,
+  // so the model returns null when there is no equity to report.
+  equity: z.string().nullish(),
 });
 export type CompRange = z.infer<typeof CompRange>;
 
@@ -294,7 +299,7 @@ export const PromptVersionsConfig = z.record(z.string(), z.string());
 export type PromptVersionsConfig = z.infer<typeof PromptVersionsConfig>;
 
 // shortlist funnel (rendered on the Shortlist header) --------------------
-// "62 screened, 27 deep, 9 answered follow-up".
+// counts computed live from real rows: screened, deep-evaluated, answered.
 export const ShortlistFunnel = z.object({
   screened: z.number().int().nonnegative(),
   deepEvaluated: z.number().int().nonnegative(),

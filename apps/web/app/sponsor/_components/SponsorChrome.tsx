@@ -6,7 +6,7 @@
 // pinned to the sidebar bottom. "Ask the Concierge" fires the header toast.
 
 import Link from 'next/link';
-import { signOut } from 'next-auth/react';
+import { signOut, useSession } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
@@ -54,6 +54,14 @@ export function SponsorChrome({
   const router = useRouter();
   const { toast } = useToast();
   const concierge = useConcierge();
+  const { data: session } = useSession();
+
+  // Avatar initial from the real member's name, falling back to the org's.
+  const avatarInitial = (
+    session?.user?.name?.trim()?.[0] ??
+    org.name.trim()[0] ??
+    '·'
+  ).toUpperCase();
 
   const pingConcierge = () => concierge.open();
 
@@ -101,7 +109,7 @@ export function SponsorChrome({
             aria-label="Sign out"
             style={{ border: 'none', cursor: 'pointer' }}
           >
-            J
+            {avatarInitial}
           </button>
         </div>
       </header>
@@ -119,7 +127,7 @@ export function SponsorChrome({
           <button
             className={`${styles.navRow} ${isRoles ? styles.navActive : ''}`}
             onClick={() =>
-              nav.rolesHref ? router.push(nav.rolesHref) : p2('Roles')
+              nav.rolesHref ? router.push(nav.rolesHref) : router.push('/sponsor')
             }
           >
             <Briefcase {...iconProps} />
@@ -131,7 +139,9 @@ export function SponsorChrome({
             onClick={() =>
               nav.shortlistHref
                 ? router.push(nav.shortlistHref)
-                : p2('Shortlist')
+                : toast('No shortlist yet. Confirm a role to start the 72h clock.', {
+                    durationMs: 3000,
+                  })
             }
           >
             <List {...iconProps} />

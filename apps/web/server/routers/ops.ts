@@ -1,8 +1,12 @@
 // Ops router — ARCHITECTURE section 7 (Ops) + the ops-console screen. Real
-// implementation. Scoped to operator principals only (opsProcedure). Data comes
-// from the seeded dev DB: the `exceptions` queue, `agent_runs` aggregates, and
-// the operational rollup blobs in `config` (ops.week_stats, ops.agent_workforce)
-// that the design prototype renders verbatim.
+// implementation. Scoped to operator principals only (opsProcedure). Every
+// number on this surface is computed from live rows: the `exceptions` queue,
+// `agent_runs` aggregates bucketed by ISO week, and the real governance `config`
+// (autonomy). There are NO operational demo blobs — the deleted ops.week_stats
+// and ops.agent_workforce are gone; the sidebar composes itself from the
+// AgentName enum + autonomy config + live agent_runs signals, and shows honest
+// zero/empty states when a week has no data. The only worker-written rollup this
+// surface reads is ops.adverse_impact (rendered when present, empty otherwise).
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
@@ -32,6 +36,7 @@ import {
   and,
   asc,
   config,
+  db as getDbFactory,
   desc,
   eq,
   evidence,
@@ -106,46 +111,244 @@ function fmtStamp(iso: string): string {
   const hh = String(d.getUTCHours()).padStart(2, '0');
   return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}, ${hh}:${mm}`;
 }
+// Short "Mon D" stamp for the workforce "last active …" signal.
+function fmtDay(d: Date): string {
+  return `${MONTH_ABBR[d.getUTCMonth()]} ${d.getUTCDate()}`;
+}
 
-// The sidebar workforce rows are display labels; map each to the AgentName enum
-// so live agent_runs signals can drive its status dot. Rows with no mapping keep
-// their configured dot untouched.
-const WORKFORCE_AGENT: Record<string, AgentName> = {
-  'Talent Rep': 'rep',
-  'Profile Synthesizer': 'synthesizer',
-  Verifier: 'verifier',
-  Recruiter: 'recruiter',
-  Concierge: 'concierge',
-  'Ops Sentinel': 'sentinel',
+// ISO-8601 week number (Thursday-anchored). The sidebar shows "wk NN" computed
+// live from the current date, never a hardcoded week.
+function isoWeekLabel(d: Date): string {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7; // 1=Mon … 7=Sun
+  t.setUTCDate(t.getUTCDate() + 4 - day); // shift to the week's Thursday
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `wk ${week}`;
+}
+
+type OpsDb = ReturnType<typeof getDbFactory>;
+
+interface AgentSignal {
+  lastRunAt: Date | null;
+  runsThisWeek: number;
+  flaggedThisWeek: number;
+}
+interface WeekMetrics {
+  runsThisWeek: number;
+  exThisWeek: number;
+  // Exceptions per 100 agent runs (null when there were no runs this week).
+  per100: number | null;
+  per100Prev: number | null;
+  trend: 'up' | 'down' | 'flat';
+  // Cost per completed screen (null when no screen-scoped runs this week).
+  costPerScreen: number | null;
+  screensThisWeek: number;
+  // Median exception-resolution minutes this week (null when none resolved).
+  medianResolveMin: number | null;
+  signalByAgent: Map<string, AgentSignal>;
+}
+
+// Compute every live "this week" number in one place (shared by the sidebar and
+// the typed agents-health contract). All buckets are ISO-week by created_at.
+async function computeWeekMetrics(db: OpsDb, now: Date): Promise<WeekMetrics> {
+  const weekStart = isoWeekStart(now);
+  const prevWeekStart = new Date(weekStart);
+  prevWeekStart.setUTCDate(prevWeekStart.getUTCDate() - 7);
+  // postgres.js cannot bind a raw Date inside a sql`` template (only drizzle's
+  // typed column helpers encode Dates); pass ISO strings into raw fragments.
+  const weekStartIso = weekStart.toISOString();
+  const prevWeekStartIso = prevWeekStart.toISOString();
+
+  const [exCounts] = await db
+    .select({
+      thisWeek: sql<number>`count(*) filter (where ${exceptions.createdAt} >= ${weekStartIso})::int`,
+      prevWeek: sql<number>`count(*) filter (where ${exceptions.createdAt} >= ${prevWeekStartIso} and ${exceptions.createdAt} < ${weekStartIso})::int`,
+    })
+    .from(exceptions);
+
+  const [runCounts] = await db
+    .select({
+      thisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso})::int`,
+      prevWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${prevWeekStartIso} and ${agentRuns.createdAt} < ${weekStartIso})::int`,
+    })
+    .from(agentRuns);
+
+  // Cost per screen: sum of cost on screen-scoped runs / distinct screens.
+  const [screenAgg] = await db
+    .select({
+      cost: sql<number>`coalesce(sum(${agentRuns.costUsd}), 0)::float8`,
+      screens: sql<number>`count(distinct split_part(${agentRuns.inputRef}, ':', 2))::int`,
+    })
+    .from(agentRuns)
+    .where(
+      and(
+        gte(agentRuns.createdAt, weekStart),
+        sql`${agentRuns.inputRef} like 'screen:%'`,
+      ),
+    );
+
+  // Median resolution minutes over exceptions resolved this week.
+  const [medianRow] = await db
+    .select({
+      median: sql<
+        number | null
+      >`percentile_cont(0.5) within group (order by extract(epoch from (${exceptions.resolvedAt} - ${exceptions.createdAt})) / 60.0)::float8`,
+    })
+    .from(exceptions)
+    .where(
+      and(
+        isNotNull(exceptions.resolvedAt),
+        gte(exceptions.resolvedAt, weekStart),
+        // Only valid durations — a resolution never precedes its creation.
+        sql`${exceptions.resolvedAt} >= ${exceptions.createdAt}`,
+      ),
+    );
+
+  // Per-agent live signals for the workforce status dots + activity line.
+  const signalRows = await db
+    .select({
+      agent: agentRuns.agent,
+      lastRunAt: sql<string | Date | null>`max(${agentRuns.createdAt})`,
+      runsThisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso})::int`,
+      flaggedThisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso} and ${agentRuns.flagged})::int`,
+    })
+    .from(agentRuns)
+    .groupBy(agentRuns.agent);
+
+  const runsThisWeek = runCounts?.thisWeek ?? 0;
+  const runsPrevWeek = runCounts?.prevWeek ?? 0;
+  const exThisWeek = exCounts?.thisWeek ?? 0;
+  const exPrevWeek = exCounts?.prevWeek ?? 0;
+  const per100 = runsThisWeek > 0 ? (exThisWeek / runsThisWeek) * 100 : null;
+  const per100Prev = runsPrevWeek > 0 ? (exPrevWeek / runsPrevWeek) * 100 : null;
+  const trend: 'up' | 'down' | 'flat' =
+    per100 == null || per100Prev == null
+      ? 'flat'
+      : per100 < per100Prev
+        ? 'down'
+        : per100 > per100Prev
+          ? 'up'
+          : 'flat';
+  const screensThisWeek = screenAgg?.screens ?? 0;
+  const costPerScreen =
+    screensThisWeek > 0 ? (screenAgg?.cost ?? 0) / screensThisWeek : null;
+  const medianResolveMin =
+    medianRow?.median != null ? Math.round(medianRow.median * 10) / 10 : null;
+
+  const signalByAgent = new Map<string, AgentSignal>(
+    signalRows.map((s) => [
+      s.agent,
+      {
+        lastRunAt: s.lastRunAt ? new Date(s.lastRunAt) : null,
+        runsThisWeek: s.runsThisWeek,
+        flaggedThisWeek: s.flaggedThisWeek,
+      },
+    ]),
+  );
+
+  return {
+    runsThisWeek,
+    exThisWeek,
+    per100,
+    per100Prev,
+    trend,
+    costPerScreen,
+    screensThisWeek,
+    medianResolveMin,
+    signalByAgent,
+  };
+}
+
+// Build the agent-workforce rows from the enum + autonomy config + live signals.
+function buildWorkforce(
+  autonomy: Record<string, 'A' | 'B' | 'C'> | null,
+  signalByAgent: Map<string, AgentSignal>,
+  now: Date,
+): z.infer<typeof WorkforceRow>[] {
+  return agentNameValues.map((agent) => {
+    const display = AGENT_DISPLAY[agent];
+    const sig = signalByAgent.get(agent);
+    const runs = sig?.runsThisWeek ?? 0;
+    const flaggedRate = runs > 0 ? (sig?.flaggedThisWeek ?? 0) / runs : 0;
+    const lastRun = sig?.lastRunAt ?? null;
+    const idle7d = !lastRun || now.getTime() - lastRun.getTime() >= ONE_WEEK_MS;
+
+    // Status dot: red if flagged rate over 10%, amber if idle 7+ days (or never
+    // run), else green.
+    const dot = flaggedRate > 0.1 ? DOT_RED : idle7d ? DOT_AMBER : DOT_GREEN;
+
+    // Activity signal replaces the fabricated eval column.
+    const signal =
+      runs > 0
+        ? `${runs} run${runs === 1 ? '' : 's'} this wk`
+        : lastRun
+          ? `last active ${fmtDay(lastRun)}`
+          : 'no runs yet';
+
+    return {
+      agent,
+      name: display.name,
+      note: display.note,
+      autonomy: autonomy?.[agent] ?? 'C',
+      dot,
+      signal,
+      runsThisWeek: runs,
+      flaggedRate,
+      lastRunAt: lastRun ? lastRun.toISOString() : null,
+    };
+  });
+}
+
+// The agent workforce is composed from the AgentName enum, not a config blob.
+// Each agent has a stable display name + a one-line note describing what it does
+// (UI copy, not demo data). Autonomy comes from the real `autonomy` config and
+// the status dot + activity signal are computed live from agent_runs.
+const AGENT_DISPLAY: Record<AgentName, { name: string; note: string }> = {
+  rep: { name: 'Talent Rep', note: 'voice screens' },
+  synthesizer: { name: 'Profile Synthesizer', note: 'student approves output' },
+  verifier: { name: 'Verifier', note: 'claims × artifacts' },
+  recruiter: { name: 'Recruiter', note: '1-in-5 shortlists sampled' },
+  concierge: { name: 'Concierge', note: 'reads A · commits C' },
+  coach: { name: 'Coach', note: 'student-facing guidance' },
+  sentinel: { name: 'Ops Sentinel', note: 'this queue, the digest' },
 };
 const DOT_RED = '#d72444'; // flagged rate over 10%
-const DOT_AMBER = '#e8b13a'; // idle 7+ days
+const DOT_AMBER = '#e8b13a'; // idle: no run in 7 days (or none ever)
+const DOT_GREEN = '#3a9a4c'; // healthy
 
-// ── sidebar payloads (config-driven, verbatim from the seed / prototype) ─────
-// The config blob carries the governance columns (name, note, eval, aut, dot);
-// the live signals are layered on top by the resolver.
-const WorkforceConfigRow = z.object({
-  name: z.string(),
-  note: z.string(),
-  eval: z.string(),
-  aut: z.string(),
-  dot: z.string(),
-});
-const WorkforceRow = WorkforceConfigRow.extend({
-  // Live agent_runs signals (null/0 when the agent has no runs yet).
-  lastRunAt: z.string().nullable().optional(),
-  runsThisWeek: z.number().int().nonnegative().optional(),
-  flaggedRate: z.number().min(0).max(1).optional(),
-});
+// Stat value colors (design tokens). Ink for neutral numbers, green for an
+// on-track/trending-down metric, muted for honest "no data yet" states.
+const INK = '#1e1e1e';
+const GREEN_TEXT = '#0d4b17';
+const MUTED = '#869db3';
+
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// ── sidebar payloads (fully computed; no config blobs) ───────────────────────
 const WeekStat = z.object({
   label: z.string(),
   value: z.string(),
   color: z.string(),
 });
+// One workforce row: identity + note are display copy; autonomy is real config;
+// dot + signal + the raw counts are computed live from agent_runs.
+const WorkforceRow = z.object({
+  agent: z.enum(agentNameValues),
+  name: z.string(),
+  note: z.string(),
+  autonomy: z.enum(['A', 'B', 'C']),
+  dot: z.string(),
+  // Honest activity summary, e.g. "12 runs this wk" / "last active Jul 1" /
+  // "no runs yet". Replaces the fabricated eval score entirely.
+  signal: z.string(),
+  runsThisWeek: z.number().int().nonnegative(),
+  flaggedRate: z.number().min(0).max(1),
+  lastRunAt: z.string().nullable(),
+});
 const SidebarOutput = z.object({
   week: z.string(),
-  digestSent: z.string(),
-  medianResolveMin: z.number(),
+  medianResolveMin: z.number().nullable(),
   stats: z.array(WeekStat),
   adverseImpact: z.object({ body: z.string(), meta: z.string() }),
   workforce: z.array(WorkforceRow),
@@ -585,164 +788,69 @@ export const opsRouter = router({
       return { exceptionId: updated.id, status: updated.status };
     }),
 
-  // GET /ops/sidebar — the sticky sidebar rollups (week stats + workforce). The
-  // config blobs the seed maintains are the layout + fallback; every number the
-  // schema can derive is computed live here (exact layout/typography preserved).
+  // GET /ops/sidebar — the sticky sidebar rollups (week stats + workforce +
+  // adverse-impact). Fully computed from live rows: no config blob backs the
+  // numbers. A week with no runs/screens/resolutions renders honest empty states
+  // (never a demo number). Autonomy comes from the real governance config; the
+  // adverse-impact card renders the worker-written rollup when present.
   sidebar: opsProcedure.output(SidebarOutput).query(async ({ ctx }) => {
-    const rows = await ctx.db.select().from(config);
-    const byKey = new Map(rows.map((r) => [r.key, r.value]));
-
-    const week = WeekStatsBlob.safeParse(byKey.get('ops.week_stats'));
-    const workforceCfg = z
-      .array(WorkforceConfigRow)
-      .safeParse(byKey.get('ops.agent_workforce'));
-
-    if (!week.success) {
-      throw new TRPCError({
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'ops.week_stats config missing or malformed',
-      });
-    }
-
-    // ── ISO week boundaries ────────────────────────────────────────────────
     const now = new Date();
-    const weekStart = isoWeekStart(now);
-    const prevWeekStart = new Date(weekStart);
-    prevWeekStart.setUTCDate(prevWeekStart.getUTCDate() - 7);
-    // postgres.js cannot bind a raw Date inside a sql`` template (only drizzle's
-    // typed column helpers encode Dates); pass ISO strings into raw fragments.
-    const weekStartIso = weekStart.toISOString();
-    const prevWeekStartIso = prevWeekStart.toISOString();
+    const m = await computeWeekMetrics(ctx.db, now);
 
-    // ── live aggregates (all bucketed by created_at into the ISO week) ─────
-    const [exCounts] = await ctx.db
-      .select({
-        thisWeek: sql<number>`count(*) filter (where ${exceptions.createdAt} >= ${weekStartIso})::int`,
-        prevWeek: sql<number>`count(*) filter (where ${exceptions.createdAt} >= ${prevWeekStartIso} and ${exceptions.createdAt} < ${weekStartIso})::int`,
-      })
-      .from(exceptions);
+    // Autonomy governance config (real). Missing → each agent defaults to C.
+    const [autonomyRow] = await ctx.db
+      .select({ value: config.value })
+      .from(config)
+      .where(eq(config.key, 'autonomy'))
+      .limit(1);
+    const autonomy = AutonomyBlob.safeParse(autonomyRow?.value);
 
-    const [runCounts] = await ctx.db
-      .select({
-        thisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso})::int`,
-        prevWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${prevWeekStartIso} and ${agentRuns.createdAt} < ${weekStartIso})::int`,
-      })
-      .from(agentRuns);
+    // The latest adverse-impact rollup the weekly worker writes (if any).
+    const [adverseRow] = await ctx.db
+      .select({ value: config.value })
+      .from(config)
+      .where(eq(config.key, 'ops.adverse_impact'))
+      .limit(1);
 
-    // Cost per screen: sum of cost on screen-scoped runs / distinct screens.
-    const [screenAgg] = await ctx.db
-      .select({
-        cost: sql<number>`coalesce(sum(${agentRuns.costUsd}), 0)::float8`,
-        screens: sql<number>`count(distinct split_part(${agentRuns.inputRef}, ':', 2))::int`,
-      })
-      .from(agentRuns)
-      .where(
-        and(
-          gte(agentRuns.createdAt, weekStart),
-          sql`${agentRuns.inputRef} like 'screen:%'`,
-        ),
-      );
-
-    // Median resolution minutes over exceptions resolved this week.
-    const [medianRow] = await ctx.db
-      .select({
-        median: sql<
-          number | null
-        >`percentile_cont(0.5) within group (order by extract(epoch from (${exceptions.resolvedAt} - ${exceptions.createdAt})) / 60.0)::float8`,
-      })
-      .from(exceptions)
-      .where(
-        and(
-          isNotNull(exceptions.resolvedAt),
-          gte(exceptions.resolvedAt, weekStart),
-          // Only valid durations — a resolution never precedes its creation.
-          sql`${exceptions.resolvedAt} >= ${exceptions.createdAt}`,
-        ),
-      );
-
-    // Per-agent live signals for the workforce status dots.
-    const signalRows = await ctx.db
-      .select({
-        agent: agentRuns.agent,
-        lastRunAt: sql<string | Date | null>`max(${agentRuns.createdAt})`,
-        runsThisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso})::int`,
-        flaggedThisWeek: sql<number>`count(*) filter (where ${agentRuns.createdAt} >= ${weekStartIso} and ${agentRuns.flagged})::int`,
-      })
-      .from(agentRuns)
-      .groupBy(agentRuns.agent);
-    const signalByAgent = new Map(signalRows.map((s) => [s.agent, s]));
-
-    // ── week stats: override only where a live number exists ───────────────
-    const runsThisWeek = runCounts?.thisWeek ?? 0;
-    const stats = week.data.stats.map((s) => {
-      if (s.label === 'Exceptions per 100 agent runs' && runsThisWeek > 0) {
-        const per100 = ((exCounts?.thisWeek ?? 0) / runsThisWeek) * 100;
-        const prevRuns = runCounts?.prevWeek ?? 0;
-        const prevPer100 =
-          prevRuns > 0 ? ((exCounts?.prevWeek ?? 0) / prevRuns) * 100 : null;
-        const arrow =
-          prevPer100 === null
-            ? ''
-            : per100 < prevPer100
-              ? ' ↓'
-              : per100 > prevPer100
-                ? ' ↑'
-                : '';
-        return { ...s, value: `${per100.toFixed(1)}${arrow}` };
-      }
-      if (
-        s.label === 'Cost per completed screen' &&
-        (screenAgg?.screens ?? 0) > 0
-      ) {
-        const perScreen = (screenAgg?.cost ?? 0) / (screenAgg?.screens ?? 1);
-        return { ...s, value: `$${perScreen.toFixed(2)}` };
-      }
-      // Operator hours and the remaining rows stay reported (config value).
-      return s;
-    });
-
-    const medianResolveMin =
-      medianRow?.median != null
-        ? Math.round(medianRow.median * 10) / 10
-        : week.data.medianResolveMin;
-
-    // ── workforce: augment config rows with live signals + status dots ─────
-    const workforce = (workforceCfg.success ? workforceCfg.data : []).map(
-      (row) => {
-        const agent = WORKFORCE_AGENT[row.name];
-        const sig = agent ? signalByAgent.get(agent) : undefined;
-        if (!sig) return row;
-
-        const runs = sig.runsThisWeek;
-        const flaggedRate = runs > 0 ? sig.flaggedThisWeek / runs : 0;
-        const lastRun = sig.lastRunAt ? new Date(sig.lastRunAt) : null;
-        const idleMs = lastRun ? now.getTime() - lastRun.getTime() : Infinity;
-        const idle7d = idleMs >= 7 * 24 * 60 * 60 * 1000;
-
-        let dot = row.dot; // configured governance dot is the fallback
-        if (runs > 0 && flaggedRate > 0.1) dot = DOT_RED;
-        else if (idle7d) dot = DOT_AMBER;
-
-        return {
-          ...row,
-          dot,
-          lastRunAt: lastRun ? lastRun.toISOString() : null,
-          runsThisWeek: runs,
-          flaggedRate,
-        };
+    // ── This week — computed live, honest zeros/empties when no data ────────
+    const exArrow = m.trend === 'down' ? ' ↓' : m.trend === 'up' ? ' ↑' : '';
+    const stats: z.infer<typeof WeekStat>[] = [
+      {
+        label: 'Exceptions per 100 agent runs',
+        value:
+          m.per100 == null ? 'no runs yet' : `${m.per100.toFixed(1)}${exArrow}`,
+        // Green only when trending down (on track); ink otherwise; muted empty.
+        color: m.per100 == null ? MUTED : m.trend === 'down' ? GREEN_TEXT : INK,
       },
+      {
+        label: 'Cost per completed screen',
+        value:
+          m.costPerScreen == null
+            ? 'no screens yet'
+            : `$${m.costPerScreen.toFixed(2)}`,
+        color: m.costPerScreen == null ? MUTED : INK,
+      },
+      {
+        label: 'Median resolution time',
+        value:
+          m.medianResolveMin == null
+            ? 'no resolutions yet'
+            : `${m.medianResolveMin} min`,
+        color: m.medianResolveMin == null ? MUTED : INK,
+      },
+    ];
+
+    const workforce = buildWorkforce(
+      autonomy.success ? autonomy.data : null,
+      m.signalByAgent,
+      now,
     );
 
-    // ── adverse-impact card: live rollup (workers, weekly) → static fallback
-    const adverseImpact = adverseImpactCard(
-      byKey.get('ops.adverse_impact'),
-      week.data.adverseImpact,
-    );
+    const adverseImpact = adverseImpactCard(adverseRow?.value);
 
     return {
-      week: week.data.week,
-      digestSent: week.data.digestSent,
-      medianResolveMin,
+      week: isoWeekLabel(now),
+      medianResolveMin: m.medianResolveMin,
       stats,
       adverseImpact,
       workforce,
@@ -753,7 +861,8 @@ export const opsRouter = router({
   // over the last 7 days + autonomy levels from config). The pixel-exact sidebar
   // list is served by `sidebar`; this is the typed health contract.
   agents: opsProcedure.output(AgentsOutput).query(async ({ ctx }) => {
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+    const since = new Date(now.getTime() - ONE_WEEK_MS);
     const grouped = await ctx.db
       .select({
         agent: agentRuns.agent,
@@ -774,18 +883,8 @@ export const opsRouter = router({
     const autonomyOf = (a: AgentName): 'A' | 'B' | 'C' =>
       (autonomy.success ? autonomy.data[a] : undefined) ?? 'C';
 
-    const week = (
-      await ctx.db.select().from(config).where(eq(config.key, 'ops.week_stats'))
-    )[0]?.value;
-    const weekParsed = WeekStatsBlob.safeParse(week);
-    const num = (s: string | undefined): number => {
-      const m = s?.match(/-?\d+(\.\d+)?/);
-      return m ? parseFloat(m[0]) : 0;
-    };
-    const findStat = (label: string): string | undefined =>
-      weekParsed.success
-        ? weekParsed.data.stats.find((s) => s.label === label)?.value
-        : undefined;
+    // Weekly rollup: computed live from real rows (no ops.week_stats blob).
+    const m = await computeWeekMetrics(ctx.db, now);
 
     return {
       agents: agentNameValues.map((a) => {
@@ -794,10 +893,11 @@ export const opsRouter = router({
         const flaggedRate = runs > 0 ? (g?.flagged ?? 0) / runs : 0;
         return {
           agent: a,
+          // No eval scores exist in the system — never fabricated.
           evalScore: null,
           autonomy: autonomyOf(a),
           // Live health: a flagged rate over 10% reads as degraded (same gate
-          // that turns the sidebar dot red). Eval + autonomy stay governance.
+          // that turns the sidebar dot red). Autonomy stays governance.
           status: (flaggedRate > 0.1 ? 'degraded' : 'healthy') as
             | 'healthy'
             | 'degraded'
@@ -808,12 +908,11 @@ export const opsRouter = router({
         };
       }),
       weekly: {
-        exceptionsPer100Runs: num(findStat('Exceptions per 100 agent runs')),
-        exceptionsTrend: (findStat('Exceptions per 100 agent runs')?.includes('↓')
-          ? 'down'
-          : 'flat') as 'up' | 'down' | 'flat',
-        operatorHours: num(findStat('Operator hours logged')),
-        costPerScreen: num(findStat('Cost per completed screen')),
+        exceptionsPer100Runs: m.per100 ?? 0,
+        exceptionsTrend: m.trend,
+        // Operator hours are not tracked anywhere; reported as 0, never invented.
+        operatorHours: 0,
+        costPerScreen: m.costPerScreen ?? 0,
       },
     };
   }),
@@ -903,13 +1002,8 @@ export const opsRouter = router({
 });
 
 // ── config blob parsers (kept below the router for readability) ──────────────
-const WeekStatsBlob = z.object({
-  week: z.string(),
-  digestSent: z.string(),
-  medianResolveMin: z.number(),
-  stats: z.array(WeekStat),
-  adverseImpact: z.object({ body: z.string(), meta: z.string() }),
-});
+// The only config this surface reads: the real `autonomy` governance blob and
+// the worker-written `ops.adverse_impact` rollup. No week-stats/workforce blobs.
 const AutonomyBlob = z.record(z.string(), z.enum(['A', 'B', 'C']));
 
 // The weekly adverse-impact rollup the workers write into ops.adverse_impact
@@ -925,16 +1019,19 @@ const AdverseImpactRollup = z
   .passthrough();
 
 /**
- * Render the adverse-impact card body + meta from the live rollup when present,
- * falling back to the static config copy otherwise. Below-band ratios are only
- * flagged (never shamed): plain language, no red, points to the Sampler.
+ * Render the adverse-impact card body + meta from the live worker-written
+ * rollup when present, or an honest "No rollup yet." when the weekly worker has
+ * not written one. Below-band ratios are only flagged (never shamed): plain
+ * language, no red, points to the Sampler.
  */
-function adverseImpactCard(
-  raw: unknown,
-  fallback: { body: string; meta: string },
-): { body: string; meta: string } {
+function adverseImpactCard(raw: unknown): { body: string; meta: string } {
   const parsed = AdverseImpactRollup.safeParse(raw);
-  if (!parsed.success) return fallback;
+  if (!parsed.success) {
+    return {
+      body: 'No rollup yet. The weekly worker writes the cohort selection-ratio read here once there is enough volume. Full view lives in the Shortlist Sampler.',
+      meta: '',
+    };
+  }
   const r = parsed.data;
   const cohortCount = r.cohorts?.length ?? 0;
   const ratio = r.impactRatio ?? null;

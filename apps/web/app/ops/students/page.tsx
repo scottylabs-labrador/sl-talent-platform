@@ -22,7 +22,12 @@ export default async function OpsStudentsPage() {
   const api = await getServerApi();
   const { students } = await api.ops.opsStudents();
 
-  const operatorInitial = session.user.name?.trim()?.[0]?.toUpperCase() ?? 'L';
+  // Real operator initial: first letter of the logged-in operator's name (or
+  // email when unnamed). Never a seeded placeholder.
+  const operatorInitial =
+    (session.user.name?.trim() || session.user.email?.trim() || '')
+      .charAt(0)
+      .toUpperCase() || '?';
 
   return (
     <OpsStudents initialStudents={students} operatorInitial={operatorInitial} />

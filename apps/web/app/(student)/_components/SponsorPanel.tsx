@@ -1,9 +1,9 @@
 'use client';
 
 // The "view as sponsor" desktop panel (640px) rendered beside the phone. This is
-// exactly what a licensed sponsor (Jordan @ Scogle) sees: the same profile data,
-// the same moment visibility the student controls, and NOTHING that is private
-// (coaching report, struck moments, grades, retake history).
+// exactly what a licensed sponsor sees: the same profile data, the same moment
+// visibility the student controls, and NOTHING that is private (coaching report,
+// struck moments, grades, retake history).
 
 import { Shield, Lock, EyeOff } from 'lucide-react';
 import { TartanBand } from '@/components/ui';
@@ -60,7 +60,7 @@ export function SponsorPanel({
           ))}
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: '#aebdcc' }}>
-          talent.scottylabs.org/pool/{andrewId} · as Jordan @ Scogle
+          talent.scottylabs.org/pool/{andrewId} · as a licensed sponsor
         </div>
       </div>
 
@@ -68,7 +68,7 @@ export function SponsorPanel({
       <div style={{ background: '#e7f5fa', borderBottom: '1px solid #b4def1', padding: '8px 18px', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Shield size={13} color="#0a6b94" style={{ flex: 'none' }} />
         <div style={{ fontSize: 11.5, color: '#0a6b94' }}>
-          Premier license: internal recruiting use only, no resale, no model training. This view was just logged to June&rsquo;s ledger.
+          Premier license: internal recruiting use only, no resale, no model training. Every real sponsor view is logged to your ledger.
         </div>
       </div>
 
@@ -116,7 +116,7 @@ export function SponsorPanel({
           <TartanBand recipe="student" thickness={5} />
           <div style={{ padding: '16px 20px 18px', display: 'flex', flexDirection: 'column', gap: 11 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>Screen Dossier · Jul 1</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Screen Dossier</div>
               <div style={{ fontSize: 10.5, color: '#869db3' }}>audio is stream only, plays are logged</div>
             </div>
             {competency.map((c) => (
@@ -153,7 +153,7 @@ export function SponsorPanel({
         <div style={{ border: '1px dashed #aebdcc', borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 9, alignItems: 'flex-start' }}>
           <Lock size={14} color="#5f6f7f" style={{ flex: 'none', marginTop: 1 }} />
           <div style={{ fontSize: 11.5, lineHeight: 1.55, color: '#5f6f7f' }}>
-            Never in this view: your coaching report, struck moments, grades, retake history, and anything you set to hidden. This panel is exactly what Jordan sees, nothing more.
+            Never in this view: your coaching report, struck moments, grades, retake history, and anything you set to hidden. This panel is exactly what a sponsor sees, nothing more.
           </div>
         </div>
       </div>

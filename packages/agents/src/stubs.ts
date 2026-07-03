@@ -6,8 +6,8 @@
 // Each canned value is schema-valid against its agent's structured-output
 // schema in @tartan/types. getStubOutput(schema) picks the first canned value
 // that satisfies the requested schema, so callers get the right shape for
-// whatever schema they passed. The narrative reuses the June Park demo thread
-// from the design notes so stub output reads like the real product.
+// whatever schema they passed. The narrative mirrors the design notes so
+// stub output reads like the real product.
 
 import type { ZodTypeAny, infer as zInfer } from 'zod';
 import type {
@@ -160,13 +160,13 @@ export const stubVerifierVerdict: VerifierVerdict = {
 // ── Concierge: reply ─────────────────────────────────────────────────────────
 export const stubConciergeReply: ConciergeReply = {
   reply:
-    'June is your strongest match for the replication team. Her Raft failure-handling is verified, and there are three audio moments you can stream from the dossier.',
+    'Your rank 1 candidate is the strongest match for the replication team. Their Raft failure-handling is verified, and there are three audio moments you can stream from the dossier.',
   suggestions: [
-    'Ask June how she would extend her replay checker to partitions.',
-    'Compare June and Rohan on systems depth.',
-    'Request an intro to June.',
+    'Ask the rank 1 candidate how they would extend their replay checker to partitions.',
+    'Compare the top two candidates on systems depth.',
+    'Request an intro to your rank 1 candidate.',
   ],
-  refs: [{ label: 'June Park (rank 1)', entryId: DEMO_ENTRY_ID }],
+  refs: [{ label: 'Rank 1 candidate', entryId: DEMO_ENTRY_ID }],
   confidence: 0.72,
 };
 
@@ -174,7 +174,7 @@ export const stubConciergeReply: ConciergeReply = {
 export const stubSentinelDigest: SentinelDigest = {
   headline: 'Agents healthy; exceptions down 12% week over week.',
   highlights: [
-    '62 screens synthesized, 9 shortlists delivered within SLA.',
+    'Screens synthesized and shortlists delivered within SLA this week.',
     'Exceptions per 100 runs fell from 4.1 to 3.6.',
   ],
   costAlerts: [

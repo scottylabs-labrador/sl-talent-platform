@@ -25,8 +25,12 @@ export default async function OpsPage() {
     api.ops.sidebar(),
   ]);
 
+  // Real operator initial: first letter of the logged-in operator's name (or
+  // email when unnamed). Never a seeded placeholder.
   const operatorInitial =
-    session.user.name?.trim()?.[0]?.toUpperCase() ?? 'L';
+    (session.user.name?.trim() || session.user.email?.trim() || '')
+      .charAt(0)
+      .toUpperCase() || '?';
 
   return (
     <OpsConsole

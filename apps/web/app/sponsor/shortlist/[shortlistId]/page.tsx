@@ -40,6 +40,32 @@ export default function ShortlistPage() {
     );
   };
 
+  if (q.isError) {
+    return (
+      <div className={styles.wrap}>
+        <div className={styles.headerCard}>
+          <TartanBand orientation="horizontal" recipe="sponsor" thickness={10} />
+          <div className={styles.headerBody}>
+            <div className={styles.headerTextCol}>
+              <span className={styles.eyebrow}>Shortlist</span>
+              <h1 className={styles.headerTitle}>No shortlist yet</h1>
+              <p className={styles.funnel}>
+                Confirm a role to start the 72h clock.
+              </p>
+            </div>
+            <div className={styles.headerBtns}>
+              <button
+                className={styles.headerPill}
+                onClick={() => router.push('/sponsor')}
+              >
+                Back to dashboard
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!q.data) return <div className={styles.wrap} aria-busy="true" />;
   const s = q.data;
 
