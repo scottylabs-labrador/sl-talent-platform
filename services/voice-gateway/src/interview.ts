@@ -18,6 +18,7 @@ import {
   SIM_SECTION_SECONDS,
   VAD_SILENCE_MS,
   CARTESIA_USD_PER_MINUTE,
+  cartesiaKey,
   isSimulation,
 } from './config.js';
 import { SECTIONS, SECTION_COUNT, sectionAt } from './sections.js';
@@ -264,6 +265,14 @@ export class InterviewSession {
     if (speaker === 'student') this.history.push({ role: 'user', content: text });
     else this.history.push({ role: 'assistant', content: text });
     void this.persist();
+
+    // Give the scripted simulation a real voice: when a Cartesia key is present
+    // (demo and prod both have one), speak the Rep's lines through Sonic TTS so
+    // the demo is audible without a microphone. Student lines are the user's
+    // own voice in a real call, so they are never synthesized.
+    if (speaker === 'rep' && cartesiaKey()) {
+      this.speak(text, turnId);
+    }
   }
 
   private synthWords(text: string, speaker: 'rep' | 'student'): TranscriptWord[] {
@@ -409,6 +418,13 @@ export class InterviewSession {
       },
     });
     this.stt.connect();
+
+    // The Rep opens the conversation: the student hears a greeting and the
+    // recording-consent explanation immediately, rather than dead air until
+    // they happen to speak first. Only on a fresh call (empty history).
+    if (this.history.length === 0) {
+      void this.runRep();
+    }
   }
 
   private onStudentFinal(text: string, words: SttWord[]): void {

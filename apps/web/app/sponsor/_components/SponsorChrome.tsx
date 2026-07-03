@@ -6,6 +6,7 @@
 // pinned to the sidebar bottom. "Ask the Concierge" fires the header toast.
 
 import Link from 'next/link';
+import { signOut } from 'next-auth/react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   Activity,
@@ -71,7 +72,7 @@ export function SponsorChrome({
     <div className={styles.shell}>
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <Link href="/" className={styles.hubLink}>
+          <Link href="/hub" className={styles.hubLink}>
             <ArrowLeft width={14} height={14} strokeWidth={2} />
             Hub
           </Link>
@@ -92,7 +93,16 @@ export function SponsorChrome({
             <MessageSquare width={13} height={13} strokeWidth={2} />
             Ask the Concierge
           </button>
-          <span className={styles.avatar}>J</span>
+          <button
+            type="button"
+            className={styles.avatar}
+            onClick={() => void signOut({ callbackUrl: '/login' })}
+            title="Sign out"
+            aria-label="Sign out"
+            style={{ border: 'none', cursor: 'pointer' }}
+          >
+            J
+          </button>
         </div>
       </header>
 

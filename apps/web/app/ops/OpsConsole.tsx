@@ -6,6 +6,7 @@
 // toast. Ported from the prototype's DCLogic; copy is verbatim from the design.
 
 import { useState } from 'react';
+import { signOut } from 'next-auth/react';
 import type { AgentName } from '@tartan/types';
 import type { ExceptionsOutput } from '@tartan/types';
 import { trpc } from '@/lib/trpc/client';
@@ -176,7 +177,7 @@ export function OpsConsole({
   return (
     <div className={styles.page}>
       <header className={styles.header}>
-        <a className={styles.hubLink} href="/">
+        <a className={styles.hubLink} href="/hub">
           <ArrowLeftIcon />
           Hub
         </a>
@@ -201,7 +202,16 @@ export function OpsConsole({
           <span className={styles.digestStamp}>
             {sidebar.week} · {sidebar.digestSent}
           </span>
-          <div className={styles.avatar}>{operatorInitial}</div>
+          <button
+            type="button"
+            className={styles.avatar}
+            onClick={() => void signOut({ callbackUrl: '/login' })}
+            title="Sign out"
+            aria-label="Sign out"
+            style={{ border: 'none', cursor: 'pointer' }}
+          >
+            {operatorInitial}
+          </button>
         </div>
       </header>
 

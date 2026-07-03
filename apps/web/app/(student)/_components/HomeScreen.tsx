@@ -35,7 +35,9 @@ export function HomeScreen() {
           </div>
           <div style={{ fontSize: 12.5, color: '#5f6f7f' }}>ScottyLabs Talent · profile live</div>
         </div>
-        <Avatar size={40} fontSize={14}>{initials(student.name)}</Avatar>
+        <Link href="/hub" aria-label="Hub" title="Hub" style={{ textDecoration: 'none' }}>
+          <Avatar size={40} fontSize={14}>{initials(student.name)}</Avatar>
+        </Link>
       </div>
 
       {/* Primary action OR published confirmation */}

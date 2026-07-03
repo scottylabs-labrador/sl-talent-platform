@@ -141,6 +141,15 @@ export function SettingsScreen() {
         </button>
       </div>
 
+      {/* Session */}
+      <button
+        type="button"
+        onClick={() => void signOut({ callbackUrl: '/login' })}
+        style={{ height: 44, borderRadius: 100, border: '1px solid #c7d2dc', background: '#fff', color: '#1e1e1e', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}
+      >
+        Sign out
+      </button>
+
       <div style={{ height: 76 }} />
     </div>
   );

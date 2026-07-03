@@ -104,7 +104,11 @@ export function useVoiceSession(opts: VoiceSessionOptions): VoiceSession {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
   }, []);
 
-  // ── TTS playback (best-effort) ─────────────────────────────────────────────
+  // ── TTS playback ───────────────────────────────────────────────────────────
+  // The gateway streams Cartesia Sonic audio as RAW little-endian PCM16 at
+  // 16 kHz mono (output_format container:'raw'). decodeAudioData cannot decode
+  // raw PCM — it needs a container — so we build an AudioBuffer by hand and
+  // schedule chunks back to back for gapless playback.
   const playTts = useCallback((b64: string) => {
     try {
       let ctx = playCtxRef.current;
@@ -113,19 +117,27 @@ export function useVoiceSession(opts: VoiceSessionOptions): VoiceSession {
         playCtxRef.current = ctx;
         playTimeRef.current = ctx.currentTime;
       }
+      // Autoplay policy: the context may start suspended; the call began from a
+      // user click so resuming here is allowed.
+      if (ctx.state === 'suspended') void ctx.resume();
+
       const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      void ctx.decodeAudioData(bytes.buffer.slice(0)).then((buf) => {
-        const node = ctx!.createBufferSource();
-        node.buffer = buf;
-        node.connect(ctx!.destination);
-        const at = Math.max(ctx!.currentTime, playTimeRef.current);
-        node.start(at);
-        playTimeRef.current = at + buf.duration;
-      }).catch(() => {
-        /* partial/opaque chunk — skip, the visual bars carry the moment */
-      });
+      const sampleCount = Math.floor(bytes.byteLength / 2);
+      if (sampleCount === 0) return;
+      const view = new DataView(bytes.buffer, bytes.byteOffset, sampleCount * 2);
+      const buf = ctx.createBuffer(1, sampleCount, 16000);
+      const channel = buf.getChannelData(0);
+      for (let i = 0; i < sampleCount; i++) {
+        channel[i] = view.getInt16(i * 2, true) / 32768;
+      }
+      const node = ctx.createBufferSource();
+      node.buffer = buf;
+      node.connect(ctx.destination);
+      const at = Math.max(ctx.currentTime, playTimeRef.current);
+      node.start(at);
+      playTimeRef.current = at + buf.duration;
     } catch {
-      /* ignore */
+      /* ignore a malformed chunk; the animated bars carry the moment */
     }
   }, []);
 
