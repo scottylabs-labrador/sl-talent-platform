@@ -236,6 +236,34 @@ export const opsRouter = router({
         ? await parseResume(input.resumeText)
         : null;
 
+      // The operator's explicit inputs win; anything they left blank is
+      // filled from the parsed resume so a resume-driven creation lands a
+      // complete profile (work auth, comp, locations, grad date, program).
+      const dl = draft?.logistics;
+      const program = input.program ?? dl?.program ?? null;
+      const gradDate =
+        input.gradDateISO ? new Date(input.gradDateISO)
+        : dl?.gradDateISO ? new Date(dl.gradDateISO)
+        : null;
+      const kind = input.kind ?? dl?.kind ?? 'undergrad';
+      const workAuth =
+        input.workAuth ??
+        (dl?.workAuth
+          ? { status: dl.workAuth.status, needsSponsorship: dl.workAuth.needsSponsorship }
+          : null);
+      const locations = input.locations ?? dl?.locations ?? null;
+      const compExpectation =
+        input.compExpectation ??
+        (dl?.compExpectation
+          ? {
+              min: dl.compExpectation.min,
+              max: dl.compExpectation.max,
+              hourly: dl.compExpectation.hourly,
+              currency: 'USD',
+            }
+          : null);
+      const startupOpen = dl?.startupOpen ?? false;
+
       // Best-effort embeddings for the seeded stories/evidence (semantic search
       // + matching). A failed embed never blocks profile creation.
       async function safeEmbed(text: string): Promise<number[] | null> {
@@ -303,14 +331,15 @@ export const opsRouter = router({
             .values({
               userId: user.id,
               andrewId: input.andrewId ?? null,
-              program: input.program ?? null,
-              gradDate: input.gradDateISO ? new Date(input.gradDateISO) : null,
-              kind: input.kind,
+              program,
+              gradDate,
+              kind,
               // omit → column default 'searchable' when the operator left it.
               ...(input.visibility ? { visibility: input.visibility } : {}),
-              workAuth: input.workAuth ?? null,
-              locations: input.locations ?? null,
-              compExpectation: input.compExpectation ?? null,
+              workAuth,
+              locations,
+              compExpectation,
+              startupOpen,
               // ops-created profiles are considered onboarded.
               onboardedAt: new Date(),
               resumeText: input.resumeText ?? null,
